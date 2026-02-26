@@ -117,6 +117,10 @@ export default {
           device_id,
           timestamp: row.timestamp
         });
+      } else {
+        return JSON_RESPONSE(200, {
+          username: authUser,
+        });
       }
 
       return new Response(null, { status: 404 });
