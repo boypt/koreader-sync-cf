@@ -3,14 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "deploy": "npx wrangler publish",
-    "build": "echo 'no build step required'"
+    "build": "echo 'no build step required'",
+    "dev": "wrangler dev -c wrangler.toml",
+    "deploymy": "wrangler deploy -c wrangler.my.toml",
+    "deploy": "wrangler deploy"
+
   },
   "engines": {
     "node": ">=16"
   }
   ,
   "devDependencies": {
-    "wrangler": "^3.5.0"
+    "@cloudflare/workers-types": "^4.20260131.0",
+    "wrangler": "^4.61.1"
   }
 }
