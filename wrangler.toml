@@ -1,0 +1,9 @@
+name = "koreader-sync-worker"
+main = "./src/index.js"
+compatibility_date = "2026-02-26"
+type = "javascript"
+
+[d1_databases]
+bindings = [
+  { binding = "KOSYNC_DB", database_name = "kosync" }
+]

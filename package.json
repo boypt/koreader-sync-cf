@@ -1,0 +1,12 @@
+{
+  "name": "koreader-sync-worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler publish",
+    "build": "echo 'no build step required'"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
