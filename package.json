@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "deploy": "wrangler publish",
+    "deploy": "npx wrangler publish",
     "build": "echo 'no build step required'"
   },
   "engines": {
     "node": ">=16"
+  }
+  ,
+  "devDependencies": {
+    "wrangler": "^3.5.0"
   }
 }
