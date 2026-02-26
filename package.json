@@ -5,9 +5,7 @@
   "scripts": {
     "build": "echo 'no build step required'",
     "dev": "wrangler dev -c wrangler.toml",
-    "deploymy": "wrangler deploy -c wrangler.my.toml",
-    "deploy": "wrangler deploy"
-
+    "deploy": "wrangler deploy -c wrangler.toml"
   },
   "engines": {
     "node": ">=16"

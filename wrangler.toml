@@ -5,3 +5,4 @@ compatibility_date = "2026-02-26"
 [[d1_databases]]
 binding = "KOSYNC_DB"
 database_name = "kosync"
+migrations_dir = "migrations"
