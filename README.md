@@ -8,7 +8,7 @@ via the Cloudflare dashboard.
 
 Repository: https://github.com/boypt/koreader-sync-cf
 
-![Deploy to Cloudflare Workers](https://img.shields.io/badge/Deploy%20to-Cloudflare%20Workers-orange)
+[![Deploy to Cloudflare](https://img.shields.io/badge/Deploy%21to-Cloudflare-blue)](https://deploy.workers.cloudflare.com/?url=https://github.com/boypt/koreader-sync-cf)
 
 ## Contents
 
@@ -28,7 +28,7 @@ as needed).
 
 - Click the button below to create a new Worker from this repository in your Cloudflare account:
 
-[![Deploy to Cloudflare](https://img.shields.io/badge/Deploy%20to-Cloudflare-blue)](https://dash.cloudflare.com/?to=/:account/workers/new&template=https://github.com/boypt/koreader-sync-cf)
+[![Deploy to Cloudflare](https://img.shields.io/badge/Deploy%21to-Cloudflare-blue)](https://deploy.workers.cloudflare.com/?url=https://github.com/boypt/koreader-sync-cf)
 
 2) CLI (wrangler)
 
