@@ -3,9 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "echo 'no build step required'",
-    "dev": "wrangler dev -c wrangler.toml",
-    "deploy": "wrangler deploy -c wrangler.toml"
+    "dev": "bunx wrangler dev -c wrangler.toml",
+    "deploy": "bunx wrangler deploy -c wrangler.toml"
   },
   "engines": {
     "node": ">=16"
