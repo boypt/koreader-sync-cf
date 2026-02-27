@@ -6,8 +6,6 @@ This repository provides a lightweight API intended to store and retrieve readin
 for KOReader clients. It is designed to be deployed to Cloudflare Workers using `wrangler` or
 via the Cloudflare dashboard.
 
-Repository: https://github.com/boypt/koreader-sync-cf
-
 [![Deploy to Cloudflare](https://img.shields.io/badge/Deploy%21to-Cloudflare-blue)](https://deploy.workers.cloudflare.com/?url=https://github.com/boypt/koreader-sync-cf)
 
 ## Contents
@@ -53,41 +51,6 @@ npx wrangler publish
 `wrangler.toml` in this repository contains the configuration used for publishing. Adjust
 environment variables and bindings in the file before publishing if necessary.
 
-3) CI / GitHub Actions (recommended for automatic deploys)
-
-Create a GitHub Actions workflow that runs `wrangler publish` on push to your main branch.
-Set the following repository secrets: `CF_API_TOKEN` and `CF_ACCOUNT_ID`.
-
-Example `.github/workflows/deploy.yml` snippet:
-
-```yaml
-name: Deploy to Cloudflare Workers
-
-on:
-	push:
-		branches: [ main ]
-
-jobs:
-	deploy:
-		runs-on: ubuntu-latest
-		steps:
-			- uses: actions/checkout@v4
-			- name: Install Node.js
-				uses: actions/setup-node@v4
-				with:
-					node-version: '18'
-			- name: Install dependencies
-				run: npm ci
-			- name: Publish to Cloudflare
-				env:
-					CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-					CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-				run: npx wrangler publish --api-token "$CF_API_TOKEN"
-```
-
-Note: adjust the workflow to your project structure and test steps. You can also use the
-official [cloudflare/wrangler-action] for publishing.
-
 ## Configuration & environment
 
 - `wrangler.toml` contains the Worker name and account bindings.
@@ -104,19 +67,6 @@ npx wrangler dev src/index.js
 ```
 
 This opens a local preview of the Worker and forwards requests to `src/index.js`.
-
-## Usage
-
-The API is small and documented inline in `src/index.js`. Typical operations:
-- POST /position — save or update a reading position
-- GET /position?user=...&book=... — fetch latest position for a user/book
-
-Adjust endpoints and authentication according to your needs.
-
-## Contributing
-
-Contributions are welcome. Please open issues or pull requests against the GitHub repository:
-https://github.com/boypt/koreader-sync-cf
 
 ## License
 
