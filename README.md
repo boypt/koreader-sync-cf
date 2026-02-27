@@ -58,6 +58,14 @@ environment variables and bindings in the file before publishing if necessary.
 	environment variables and bind them in `wrangler.toml`.
 - If you plan to run migrations, see `migrations/001_create_tables.sql` as an example schema.
 
+### Environment Variable
+
+- `RECEIVE_RANDOM_DEVICE_ID`: Default False.
+Set it true to retrieve always a random device id to force a progress sync. This is usefull if you only sync your progress from one device and usually delete the *.sdr files with some cleaning tools.
+
+- `OPEN_REGISTRATIONS`: Default True.
+Enable/disable new registrations to the server. Useful if you want to run a private server for a few users, although it doesn't necessarily improve security by itself. Set to True (enabled) by default.
+
 ## Local development
 
 You can test locally with `wrangler dev`:
