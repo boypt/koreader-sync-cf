@@ -162,3 +162,7 @@ cython_debug/
 
 # koreader-sync
 data/db.json
+
+# Dependencies
+node_modules/
+.wrangler/
