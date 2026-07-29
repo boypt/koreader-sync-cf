@@ -145,7 +145,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   <h1>KOReader Sync</h1>
   <div>
     <a href="#" class="theme-toggle" onclick="toggleTheme();return false;">&#9681;</a>
-    <button onclick="logout()" class="outline" style="margin:0 0 0 0.5rem">Logout</button>
+    <button onclick="logout()" class="outline" style="margin:1rem;padding:0.38rem;font-size:0.85rem">Logout</button>
   </div>
 </header>
 <main class="container">
