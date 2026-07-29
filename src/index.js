@@ -201,7 +201,7 @@ function logout() {
 
 function formatTime(ts) {
   if (!ts) return '';
-  return new Date(ts * 1000).toLocaleString();
+  return dayjs(ts * 1000).format('YYYY-MM-DD HH:mm:ss');
 }
 
 function relativeTime(ts) {
@@ -294,8 +294,8 @@ async function loadHistory(docEncoded, rowEl) {
     html += '<td>' + renderProgressBar(entry.percentage) + '</td>';
     html += '<td>' + escapeHtml(entry.device || '') + '</td>';
     html += '<td>' + escapeHtml(entry.device_id || '') + '</td>';
-    html += '<td>' + formatTime(entry.timestamp) + '</td>';
-    html += '<td>' + formatTime(entry.created_at) + '</td>';
+    html += '<td>' + relativeTime(entry.timestamp) + '</td>';
+    html += '<td>' + relativeTime(entry.created_at) + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
@@ -318,7 +318,7 @@ async function loadTimeline() {
     var title = displayTitle(entry);
     html += '<div class="timeline-item">';
     html += '<div><strong>' + escapeHtml(title) + '</strong> &mdash; ' + renderProgressBar(entry.percentage) + '</div>';
-    html += '<div class="timeline-meta">' + formatTime(entry.timestamp || entry.created_at) + ' &middot; ' + escapeHtml(entry.device || '') + '</div>';
+    html += '<div class="timeline-meta">' + relativeTime(entry.timestamp || entry.created_at) + ' &middot; ' + escapeHtml(entry.device || '') + '</div>';
     if (entry.authors) html += '<div class="timeline-meta">Authors: ' + escapeHtml(entry.authors) + '</div>';
     html += '</div>';
   });
