@@ -52,96 +52,53 @@ async function getSessionUser(db, request) {
 }
 
 const LOGIN_PAGE_HTML = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KOReader Sync - Login</title>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<script src="//cdn.jsdelivr.net/npm/blueimp-md5@2.19.0/js/md5.min.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: #f0f2f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  .card { background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); width: 100%; max-width: 360px; }
-  h1 { font-size: 1.5rem; margin-bottom: 1.5rem; text-align: center; color: #333; }
-  label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: #555; }
-  input { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 1rem; margin-bottom: 1rem; }
-  input:focus { outline: none; border-color: #4a90d9; }
-  button { width: 100%; padding: 0.75rem; background: #4a90d9; color: #fff; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; }
-  button:hover { background: #3a7bc8; }
-  .error { color: #d32f2f; margin-bottom: 1rem; text-align: center; display: none; }
+  .login-card { max-width: 360px; margin: 10vh auto; }
+  .login-card h1 { text-align: center; }
+  .error-msg { color: var(--pico-color-red-500, #d32f2f); text-align: center; margin-bottom: 1rem; display: none; }
+  .theme-toggle { position: absolute; top: 1rem; right: 1rem; opacity: 0.7; cursor: pointer; }
 </style>
 </head>
 <body>
-<div class="card">
+<div class="login-card">
+  <a href="#" class="theme-toggle" onclick="toggleTheme();return false;">&#9681;</a>
   <h1>KOReader Sync</h1>
-  <div class="error" id="error"></div>
+  <div class="error-msg" id="error"></div>
   <form id="loginForm">
-    <label for="username">Username</label>
-    <input type="text" id="username" name="username" required autocomplete="username">
-    <label for="password">Password</label>
-    <input type="password" id="password" name="password" required autocomplete="current-password">
+    <label for="username">Username
+      <input type="text" id="username" name="username" required autocomplete="username">
+    </label>
+    <label for="password">Password
+      <input type="password" id="password" name="password" required autocomplete="current-password">
+    </label>
     <button type="submit">Login</button>
   </form>
 </div>
 <script>
-function md5(input) {
-  var s = unescape(encodeURIComponent(input));
-  function rl(v, n) { return (v << n) | (v >>> (32 - n)); }
-  function au(x, y) {
-    var x8 = x & 0x80000000, y8 = y & 0x80000000, x4 = x & 0x40000000, y4 = y & 0x40000000;
-    var r = (x & 0x3FFFFFFF) + (y & 0x3FFFFFFF);
-    if (x4 & y4) return r ^ 0x80000000 ^ x8 ^ y8;
-    if (x4 | y4) { return (r & 0x40000000) ? (r ^ 0xC0000000 ^ x8 ^ y8) : (r ^ 0x40000000 ^ x8 ^ y8); }
-    return r ^ x8 ^ y8;
-  }
-  function F(x,y,z){return (x&y)|((~x)&z);}
-  function G(x,y,z){return (x&z)|(y&(~z));}
-  function H(x,y,z){return x^y^z;}
-  function I(x,y,z){return y^(x|(~z));}
-  function FF(a,b,c,d,x,s,t){a=au(a,au(au(F(b,c,d),x),t));return au(rl(a,s),b);}
-  function GG(a,b,c,d,x,s,t){a=au(a,au(au(G(b,c,d),x),t));return au(rl(a,s),b);}
-  function HH(a,b,c,d,x,s,t){a=au(a,au(au(H(b,c,d),x),t));return au(rl(a,s),b);}
-  function II(a,b,c,d,x,s,t){a=au(a,au(au(I(b,c,d),x),t));return au(rl(a,s),b);}
-  function toWords(str) {
-    var len = str.length, nW = (((len + 8) - ((len + 8) % 64)) / 64 + 1) * 16;
-    var wa = new Array(nW).fill(0), wc, pos, count = 0;
-    while (count < len) { wc = (count - count % 4) / 4; pos = (count % 4) * 8; wa[wc] |= (str.charCodeAt(count) << pos); count++; }
-    wc = (count - count % 4) / 4; pos = (count % 4) * 8;
-    wa[wc] |= (0x80 << pos); wa[nW - 2] = len << 3; wa[nW - 1] = len >>> 29;
-    return wa;
-  }
-  function toHex(w) {
-    var h = '0123456789abcdef', s = '';
-    for (var i = 0; i <= 3; i++) { var b = (w >>> (i * 8)) & 255; s += h[(b >> 4) & 0xF] + h[b & 0xF]; }
-    return s;
-  }
-  var x = toWords(s), a = 0x67452301, b = 0xEFCDAB89, c = 0x98BADCFE, d = 0x10325476;
-  for (var i = 0; i < x.length; i += 16) {
-    var oa = a, ob = b, oc = c, od = d;
-    a=FF(a,b,c,d,x[i],7,0xD76AA478);d=FF(d,a,b,c,x[i+1],12,0xE8C7B756);c=FF(c,d,a,b,x[i+2],17,0x242070DB);b=FF(b,c,d,a,x[i+3],22,0xC1BDCEEE);
-    a=FF(a,b,c,d,x[i+4],7,0xF57C0FAF);d=FF(d,a,b,c,x[i+5],12,0x4787C62A);c=FF(c,d,a,b,x[i+6],17,0xA8304613);b=FF(b,c,d,a,x[i+7],22,0xFD469501);
-    a=FF(a,b,c,d,x[i+8],7,0x698098D8);d=FF(d,a,b,c,x[i+9],12,0x8B44F7AF);c=FF(c,d,a,b,x[i+10],17,0xFFFF5BB1);b=FF(b,c,d,a,x[i+11],22,0x895CD7BE);
-    a=FF(a,b,c,d,x[i+12],7,0x6B901122);d=FF(d,a,b,c,x[i+13],12,0xFD987193);c=FF(c,d,a,b,x[i+14],17,0xA679438E);b=FF(b,c,d,a,x[i+15],22,0x49B40821);
-    a=GG(a,b,c,d,x[i+1],5,0xF61E2562);d=GG(d,a,b,c,x[i+6],9,0xC040B340);c=GG(c,d,a,b,x[i+11],14,0x265E5A51);b=GG(b,c,d,a,x[i],20,0xE9B6C7AA);
-    a=GG(a,b,c,d,x[i+5],5,0xD62F105D);d=GG(d,a,b,c,x[i+10],9,0x2441453);c=GG(c,d,a,b,x[i+15],14,0xD8A1E681);b=GG(b,c,d,a,x[i+4],20,0xE7D3FBC8);
-    a=GG(a,b,c,d,x[i+9],5,0x21E1CDE6);d=GG(d,a,b,c,x[i+14],9,0xC33707D6);c=GG(c,d,a,b,x[i+3],14,0xF4D50D87);b=GG(b,c,d,a,x[i+8],20,0x455A14ED);
-    a=GG(a,b,c,d,x[i+13],5,0xA9E3E905);d=GG(d,a,b,c,x[i+2],9,0xFCEFA3F8);c=GG(c,d,a,b,x[i+7],14,0x676F02D9);b=GG(b,c,d,a,x[i+12],20,0x8D2A4C8A);
-    a=HH(a,b,c,d,x[i+5],4,0xFFFA3942);d=HH(d,a,b,c,x[i+8],11,0x8771F681);c=HH(c,d,a,b,x[i+11],16,0x6D9D6122);b=HH(b,c,d,a,x[i+14],23,0xFDE5380C);
-    a=HH(a,b,c,d,x[i+1],4,0xA4BEEA44);d=HH(d,a,b,c,x[i+4],11,0x4BDECFA9);c=HH(c,d,a,b,x[i+7],16,0xF6BB4B60);b=HH(b,c,d,a,x[i+10],23,0xBEBFBC70);
-    a=HH(a,b,c,d,x[i+13],4,0x289B7EC6);d=HH(d,a,b,c,x[i],11,0xEAA127FA);c=HH(c,d,a,b,x[i+3],16,0xD4EF3085);b=HH(b,c,d,a,x[i+6],23,0x4881D05);
-    a=HH(a,b,c,d,x[i+9],4,0xD9D4D039);d=HH(d,a,b,c,x[i+12],11,0xE6DB99E5);c=HH(c,d,a,b,x[i+15],16,0x1FA27CF8);b=HH(b,c,d,a,x[i+2],23,0xC4AC5665);
-    a=II(a,b,c,d,x[i],6,0xF4292244);d=II(d,a,b,c,x[i+7],10,0x432AFF97);c=II(c,d,a,b,x[i+14],15,0xAB9423A7);b=II(b,c,d,a,x[i+5],21,0xFC93A039);
-    a=II(a,b,c,d,x[i+12],6,0x655B59C3);d=II(d,a,b,c,x[i+3],10,0x8F0CCC92);c=II(c,d,a,b,x[i+10],15,0xFFEFF47D);b=II(b,c,d,a,x[i+1],21,0x85845DD1);
-    a=II(a,b,c,d,x[i+8],6,0x6FA87E4F);d=II(d,a,b,c,x[i+15],10,0xFE2CE6E0);c=II(c,d,a,b,x[i+6],15,0xA3014314);b=II(b,c,d,a,x[i+13],21,0x4E0811A1);
-    a=II(a,b,c,d,x[i+4],6,0xF7537E82);d=II(d,a,b,c,x[i+11],10,0xBD3AF235);c=II(c,d,a,b,x[i+2],15,0x2AD7D2BB);b=II(b,c,d,a,x[i+9],21,0xEB86D391);
-    a=au(a,oa);b=au(b,ob);c=au(c,oc);d=au(d,od);
-  }
-  return toHex(a) + toHex(b) + toHex(c) + toHex(d);
+var STORAGE_KEY = 'kosync-theme';
+function applyStoredTheme() {
+  var t = localStorage.getItem(STORAGE_KEY);
+  if (t) document.documentElement.setAttribute('data-theme', t);
 }
+function toggleTheme() {
+  var cur = document.documentElement.getAttribute('data-theme') || 'auto';
+  var next = cur === 'light' ? 'dark' : cur === 'dark' ? 'auto' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem(STORAGE_KEY, next);
+}
+applyStoredTheme();
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const errorEl = document.getElementById('error');
+  var errorEl = document.getElementById('error');
   errorEl.style.display = 'none';
-  const res = await fetch('/web/login', {
+  var res = await fetch('/web/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -149,7 +106,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       password: md5(document.getElementById('password').value)
     })
   });
-  const data = await res.json();
+  var data = await res.json();
   if (data.ok) {
     window.location.href = '/web/dashboard';
   } else {
@@ -162,61 +119,76 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 </html>`;
 
 const DASHBOARD_HTML = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KOReader Sync - Dashboard</title>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<link rel="stylesheet" href="//cdn.jsdelivr.net/npm/simple-datatables@latest/dist/style.css">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: #f0f2f5; color: #333; }
-  header { background: #4a90d9; color: #fff; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
-  header h1 { font-size: 1.25rem; }
-  header button { padding: 0.5rem 1rem; background: rgba(255,255,255,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 0.875rem; }
-  header button:hover { background: rgba(255,255,255,0.3); }
-  main { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
-  section { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 1.5rem; margin-bottom: 1.5rem; }
-  section h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #555; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #eee; }
-  th { font-weight: 600; color: #666; font-size: 0.875rem; }
-  th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
-  th.sortable:hover { color: #4a90d9; }
-  th.sortable .sort-ind { display: inline-block; margin-left: 0.25rem; opacity: 0.35; font-size: 0.75rem; }
-  th.sortable.sorted .sort-ind { opacity: 1; color: #4a90d9; }
-  tr:hover { background: #f8f9fa; }
-  .doc-row { cursor: pointer; }
-  .doc-row.active { background: #e8f0fe; }
-  .empty { text-align: center; color: #999; padding: 2rem; }
-  .timeline-item { padding: 0.75rem 0; border-bottom: 1px solid #eee; }
+  .dashboard-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; }
+  .table-wrapper { overflow-x: auto; }
+  .progress-bar { display: inline-block; width: 80px; height: 8px; background: var(--pico-color-muted-background, #e0e0e0); border-radius: 4px; vertical-align: middle; margin-right: 0.5rem; }
+  .progress-bar-fill { height: 100%; background: var(--pico-primary, #4a90d9); border-radius: 4px; }
+  .timeline-item { padding: 0.75rem 0; border-bottom: 1px solid var(--pico-color-muted-border-color, #eee); }
   .timeline-item:last-child { border-bottom: none; }
-  .timeline-meta { font-size: 0.875rem; color: #888; }
-  .progress-bar { display: inline-block; width: 80px; height: 8px; background: #e0e0e0; border-radius: 4px; vertical-align: middle; margin-right: 0.5rem; }
-  .progress-bar-fill { height: 100%; background: #4a90d9; border-radius: 4px; }
+  .timeline-meta { font-size: 0.875rem; color: var(--pico-color-muted, #888); }
+  .empty { text-align: center; color: var(--pico-color-muted, #999); padding: 2rem; }
+  .doc-row { cursor: pointer; }
+  .doc-row.active { background: var(--pico-color-primary-background-muted, #e8f0fe); }
+  .theme-toggle { opacity: 0.7; cursor: pointer; }
+  .chart-section { display: none; }
 </style>
 </head>
 <body>
-<header>
+<header class="dashboard-header">
   <h1>KOReader Sync</h1>
-  <button onclick="logout()">Logout</button>
+  <div>
+    <a href="#" class="theme-toggle" onclick="toggleTheme();return false;">&#9681;</a>
+    <button onclick="logout()" class="outline" style="margin:0 0 0 0.5rem">Logout</button>
+  </div>
 </header>
-<main>
-  <section id="documents">
+<main class="container">
+  <section>
     <h2>Documents</h2>
-    <div id="documentsContent"><div class="empty">Loading...</div></div>
+    <div class="table-wrapper">
+      <div id="documentsContent"><div class="empty">Loading...</div></div>
+    </div>
   </section>
-  <section id="history">
+  <section>
     <h2>Document History</h2>
-    <div id="historyContent"><div class="empty">Select a document to view history</div></div>
+    <div class="table-wrapper">
+      <div id="historyContent"><div class="empty">Select a document to view history</div></div>
+    </div>
   </section>
-  <section id="timeline">
+  <section>
     <h2>Global Timeline</h2>
     <div id="timelineContent"><div class="empty">Loading...</div></div>
   </section>
+  <section class="chart-section">
+    <h2>Statistics</h2>
+    <canvas id="statsChart"></canvas>
+  </section>
 </main>
+<script src="//cdn.jsdelivr.net/npm/simple-datatables@latest/dist/umd/simple-datatables.js"></script>
+<script src="//cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
+var STORAGE_KEY = 'kosync-theme';
+function applyStoredTheme() {
+  var t = localStorage.getItem(STORAGE_KEY);
+  if (t) document.documentElement.setAttribute('data-theme', t);
+}
+function toggleTheme() {
+  var cur = document.documentElement.getAttribute('data-theme') || 'auto';
+  var next = cur === 'light' ? 'dark' : cur === 'dark' ? 'auto' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem(STORAGE_KEY, next);
+}
+applyStoredTheme();
+
 async function apiFetch(path) {
-  const res = await fetch(path);
+  var res = await fetch(path);
   if (res.status === 401) { window.location.href = '/web'; return null; }
   return res.json();
 }
@@ -240,65 +212,22 @@ function escapeHtml(s) {
 }
 
 var documentsData = [];
-var docSort = { key: 'timestamp', dir: 'desc' };
 var activeDocId = null;
-
-function docSortValue(doc, key) {
-  if (key === 'title') return String(doc.title || doc.filename || doc.document || '').toLowerCase();
-  if (key === 'authors') return String(doc.authors || '').toLowerCase();
-  if (key === 'percentage') return Number(doc.percentage) || 0;
-  if (key === 'device') return String(doc.device || '').toLowerCase();
-  if (key === 'timestamp') return Number(doc.timestamp) || 0;
-  return '';
-}
-
-function sortDocuments(data) {
-  var key = docSort.key;
-  var dir = docSort.dir === 'asc' ? 1 : -1;
-  var numeric = key === 'percentage' || key === 'timestamp';
-  return data.slice().sort(function(a, b) {
-    var va = docSortValue(a, key);
-    var vb = docSortValue(b, key);
-    if (numeric) return (va - vb) * dir;
-    if (va < vb) return -1 * dir;
-    if (va > vb) return 1 * dir;
-    return 0;
-  });
-}
-
-function sortIndicator(key) {
-  if (docSort.key !== key) return '<span class="sort-ind">&#8597;</span>';
-  return docSort.dir === 'asc'
-    ? '<span class="sort-ind">&#9650;</span>'
-    : '<span class="sort-ind">&#9660;</span>';
-}
-
-function thClass(key) {
-  return 'sortable' + (docSort.key === key ? ' sorted' : '');
-}
-
-function setDocSort(key) {
-  if (docSort.key === key) {
-    docSort.dir = docSort.dir === 'asc' ? 'desc' : 'asc';
-  } else {
-    docSort.key = key;
-    docSort.dir = (key === 'timestamp' || key === 'percentage') ? 'desc' : 'asc';
-  }
-  renderDocuments();
-}
+var docsTable = null;
+var histTable = null;
 
 function renderDocuments() {
   var el = document.getElementById('documentsContent');
   if (!documentsData.length) { el.innerHTML = '<div class="empty">No documents yet</div>'; return; }
-  var data = sortDocuments(documentsData);
-  var html = '<table><thead><tr>';
-  html += '<th class="' + thClass('title') + '" onclick="setDocSort(\\'title\\')">Title' + sortIndicator('title') + '</th>';
-  html += '<th class="' + thClass('authors') + '" onclick="setDocSort(\\'authors\\')">Authors' + sortIndicator('authors') + '</th>';
-  html += '<th class="' + thClass('percentage') + '" onclick="setDocSort(\\'percentage\\')">Progress' + sortIndicator('percentage') + '</th>';
-  html += '<th class="' + thClass('device') + '" onclick="setDocSort(\\'device\\')">Device' + sortIndicator('device') + '</th>';
-  html += '<th class="' + thClass('timestamp') + '" onclick="setDocSort(\\'timestamp\\')">Last Sync' + sortIndicator('timestamp') + '</th>';
+  var html = '<table id="docsTable" class="table">';
+  html += '<thead><tr>';
+  html += '<th>Title</th>';
+  html += '<th>Authors</th>';
+  html += '<th>Progress</th>';
+  html += '<th>Device</th>';
+  html += '<th>Last Sync</th>';
   html += '</tr></thead><tbody>';
-  data.forEach(function(doc) {
+  documentsData.forEach(function(doc) {
     var title = doc.title || doc.filename || doc.document;
     var authors = doc.authors || '';
     var active = activeDocId === doc.document ? ' active' : '';
@@ -312,6 +241,13 @@ function renderDocuments() {
   });
   html += '</tbody></table>';
   el.innerHTML = html;
+  if (docsTable) docsTable.destroy();
+  docsTable = new simpleDatatables.DataTable('#docsTable', {
+    searchable: true,
+    fixedHeight: false,
+    perPage: 10,
+    perPageSelect: [10, 25, 50]
+  });
 }
 
 async function loadDocuments() {
@@ -328,16 +264,32 @@ async function loadHistory(docEncoded, rowEl) {
   var data = await apiFetch('/web/api/documents/' + docEncoded + '/history');
   var el = document.getElementById('historyContent');
   if (!data || !data.length) { el.innerHTML = '<div class="empty">No history for this document</div>'; return; }
-  var html = '';
+  var html = '<table id="histTable" class="table">';
+  html += '<thead><tr>';
+  html += '<th>Progress</th>';
+  html += '<th>Device</th>';
+  html += '<th>Device ID</th>';
+  html += '<th>Timestamp</th>';
+  html += '<th>Created At</th>';
+  html += '</tr></thead><tbody>';
   data.forEach(function(entry) {
-    var title = entry.title || entry.filename || entry.document;
-    html += '<div class="timeline-item">';
-    html += '<div><strong>' + escapeHtml(title) + '</strong> &mdash; ' + renderProgressBar(entry.percentage) + '</div>';
-    html += '<div class="timeline-meta">' + formatTime(entry.timestamp || entry.created_at) + ' &middot; ' + escapeHtml(entry.device || '') + '</div>';
-    if (entry.authors) html += '<div class="timeline-meta">Authors: ' + escapeHtml(entry.authors) + '</div>';
-    html += '</div>';
+    html += '<tr>';
+    html += '<td>' + renderProgressBar(entry.percentage) + '</td>';
+    html += '<td>' + escapeHtml(entry.device || '') + '</td>';
+    html += '<td>' + escapeHtml(entry.device_id || '') + '</td>';
+    html += '<td>' + formatTime(entry.timestamp) + '</td>';
+    html += '<td>' + formatTime(entry.created_at) + '</td>';
+    html += '</tr>';
   });
+  html += '</tbody></table>';
   el.innerHTML = html;
+  if (histTable) histTable.destroy();
+  histTable = new simpleDatatables.DataTable('#histTable', {
+    searchable: true,
+    fixedHeight: false,
+    perPage: 10,
+    perPageSelect: [10, 25, 50]
+  });
 }
 
 async function loadTimeline() {
@@ -350,6 +302,7 @@ async function loadTimeline() {
     html += '<div class="timeline-item">';
     html += '<div><strong>' + escapeHtml(title) + '</strong> &mdash; ' + renderProgressBar(entry.percentage) + '</div>';
     html += '<div class="timeline-meta">' + formatTime(entry.timestamp || entry.created_at) + ' &middot; ' + escapeHtml(entry.device || '') + '</div>';
+    if (entry.authors) html += '<div class="timeline-meta">Authors: ' + escapeHtml(entry.authors) + '</div>';
     html += '</div>';
   });
   el.innerHTML = html;
