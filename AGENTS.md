@@ -47,7 +47,7 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
   - **PicoCSS v2** - base styling, `data-theme="auto"` follows system light/dark; user toggle via `localStorage` key `kosync-theme`
   - **blueimp-md5** - login page hashes password client-side (`md5(password)`) before sending to `/web/login`
   - **Simple-DataTables** - sortable/searchable/paginated tables for Documents and History
-  - **Day.js** + relativeTime plugin - `dayjs(ts*1000).fromNow()` for Last Sync column; falls back to `toLocaleString()` for dates > 30 days
+  - **Day.js** + relativeTime plugin - `dayjs(ts*1000).fromNow()` for all time columns; exact time shown on hover via `<span title="...">`; `formatTime()` uses `dayjs().format('YYYY-MM-DD HH:mm:ss')` as the tooltip text
   - **Chart.js v4** - loaded but **not initialized**; `<canvas id="statsChart">` in a hidden `<section class="chart-section">` for future stats charts
 - **HTML constants:** `LOGIN_PAGE_HTML` and `DASHBOARD_HTML` are JS template literals in `src/index.js` - note escaped backticks/quotes in onclick handlers
 - **Progress bars** use PicoCSS native `<progress value="x" max="100">` element (not custom spans) - PicoCSS styles it via `--pico-progress-color`
@@ -91,6 +91,7 @@ Session cookies: `HttpOnly; SameSite=Lax; Path=/web; Max-Age=86400`; `Secure` ad
 - Web UI HTML is inside JS template literals - backticks and `${}` in inline JS/CSS must be escaped (`\\'`, `\\\``); editing HTML requires care with escaping.
 - PicoCSS v2 CSS variables differ from v1 - use `--pico-primary`, `--pico-muted-color`, `--pico-muted-border-color` etc., not `--pico-color-*` prefixes.
 - Chart.js is loaded via CDN but intentionally not initialized - do not assume `Chart` is undefined; the `<canvas>` exists but `display:none`.
+- Simple-DataTables reads `data-order` (not `data-sort`) on `<td>` for custom sort values - use `data-order` with raw timestamp for time columns that display relative time.
 
 ## When changing behavior
 
