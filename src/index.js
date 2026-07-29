@@ -251,7 +251,7 @@ function renderDocuments() {
     html += '<td>' + escapeHtml(authors) + '</td>';
     html += '<td>' + renderProgressBar(doc.percentage) + '</td>';
     html += '<td>' + escapeHtml(doc.device || '') + '</td>';
-    html += '<td>' + relativeTime(doc.timestamp) + '</td>';
+    html += '<td data-sort="' + (doc.timestamp || 0) + '">' + relativeTime(doc.timestamp) + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
@@ -292,8 +292,8 @@ async function loadHistory(docEncoded, rowEl) {
     html += '<td>' + renderProgressBar(entry.percentage) + '</td>';
     html += '<td>' + escapeHtml(entry.device || '') + '</td>';
     html += '<td>' + escapeHtml(entry.device_id || '') + '</td>';
-    html += '<td>' + relativeTime(entry.timestamp) + '</td>';
-    html += '<td>' + relativeTime(entry.created_at) + '</td>';
+    html += '<td data-sort="' + (entry.timestamp || 0) + '">' + relativeTime(entry.timestamp) + '</td>';
+    html += '<td data-sort="' + (entry.created_at || 0) + '">' + relativeTime(entry.created_at) + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
