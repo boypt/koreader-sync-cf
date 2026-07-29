@@ -454,6 +454,14 @@ export default {
       return JSON_RESPONSE(200, res.results || []);
     }
 
+    // GET / -> redirect to /web
+    if (method === 'GET' && pathname === '') {
+      return new Response(null, {
+        status: 302,
+        headers: { 'Location': '/web' }
+      });
+    }
+
     // GET /web
     if (method === 'GET' && pathname === '/web') {
       return HTML_RESPONSE(LOGIN_PAGE_HTML);
