@@ -172,7 +172,10 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 </main>
 <script src="//cdn.jsdelivr.net/npm/simple-datatables@latest/dist/umd/simple-datatables.js"></script>
 <script src="//cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/dayjs@1.11.13/plugin/relativeTime.js"></script>
 <script>
+dayjs.extend(dayjs_plugin_relativeTime);
 var STORAGE_KEY = 'kosync-theme';
 function applyStoredTheme() {
   var t = localStorage.getItem(STORAGE_KEY);
@@ -199,6 +202,13 @@ function logout() {
 function formatTime(ts) {
   if (!ts) return '';
   return new Date(ts * 1000).toLocaleString();
+}
+
+function relativeTime(ts) {
+  if (!ts) return '';
+  var diff = Date.now() / 1000 - ts;
+  if (diff < 0 || diff >= 30 * 86400) return formatTime(ts);
+  return dayjs(ts * 1000).fromNow();
 }
 
 function renderProgressBar(pct) {
@@ -243,7 +253,7 @@ function renderDocuments() {
     html += '<td>' + escapeHtml(authors) + '</td>';
     html += '<td>' + renderProgressBar(doc.percentage) + '</td>';
     html += '<td>' + escapeHtml(doc.device || '') + '</td>';
-    html += '<td>' + formatTime(doc.timestamp) + '</td>';
+    html += '<td>' + relativeTime(doc.timestamp) + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
