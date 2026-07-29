@@ -206,9 +206,7 @@ function formatTime(ts) {
 
 function relativeTime(ts) {
   if (!ts) return '';
-  var diff = Date.now() / 1000 - ts;
-  if (diff < 0 || diff >= 30 * 86400) return formatTime(ts);
-  return dayjs(ts * 1000).fromNow();
+  return '<span title="' + formatTime(ts) + '">' + dayjs(ts * 1000).fromNow() + '</span>';
 }
 
 function renderProgressBar(pct) {
