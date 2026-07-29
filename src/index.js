@@ -129,8 +129,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 <style>
   .dashboard-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; }
   .table-wrapper { overflow-x: auto; }
-  .progress-bar { display: inline-block; width: 80px; height: 8px; background: var(--pico-color-muted-background, #e0e0e0); border-radius: 4px; vertical-align: middle; margin-right: 0.5rem; }
-  .progress-bar-fill { height: 100%; background: var(--pico-primary, #4a90d9); border-radius: 4px; }
+  .progress-inline { width: 80px; vertical-align: middle; margin-right: 0.5rem; }
   .timeline-item { padding: 0.75rem 0; border-bottom: 1px solid var(--pico-color-muted-border-color, #eee); }
   .timeline-item:last-child { border-bottom: none; }
   .timeline-meta { font-size: 0.875rem; color: var(--pico-color-muted, #888); }
@@ -204,7 +203,7 @@ function formatTime(ts) {
 
 function renderProgressBar(pct) {
   var val = Math.round((pct || 0) * 100);
-  return '<span class="progress-bar"><span class="progress-bar-fill" style="width:' + val + '%"></span></span> ' + val + '%';
+  return '<progress class="progress-inline" value="' + val + '" max="100"></progress> ' + val + '%';
 }
 
 function escapeHtml(s) {
