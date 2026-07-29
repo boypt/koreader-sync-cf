@@ -2,6 +2,9 @@ name = "koreader-sync-worker"
 main = "./src/index.js"
 compatibility_date = "2026-02-26"
 
+[observability]
+enabled = false
+
 [[d1_databases]]
 binding = "KOSYNC_DB"
 database_name = "kosync"
