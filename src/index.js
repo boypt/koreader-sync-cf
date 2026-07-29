@@ -210,6 +210,14 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function displayTitle(item) {
+  var title = item.title || item.filename || item.document || '';
+  if (!item.title && !item.filename && item.document && /^[0-9a-f]{32}$/i.test(item.document)) {
+    title = item.document.substring(0, 8) + '…';
+  }
+  return title;
+}
+
 var documentsData = [];
 var activeDocId = null;
 var docsTable = null;
@@ -227,7 +235,7 @@ function renderDocuments() {
   html += '<th>Last Sync</th>';
   html += '</tr></thead><tbody>';
   documentsData.forEach(function(doc) {
-    var title = doc.title || doc.filename || doc.document;
+    var title = displayTitle(doc);
     var authors = doc.authors || '';
     var active = activeDocId === doc.document ? ' active' : '';
     html += '<tr class="doc-row' + active + '" onclick="loadHistory(\\'' + encodeURIComponent(doc.document) + '\\', this)">';
@@ -297,7 +305,7 @@ async function loadTimeline() {
   if (!data || !data.length) { el.innerHTML = '<div class="empty">No sync events yet</div>'; return; }
   var html = '';
   data.forEach(function(entry) {
-    var title = entry.title || entry.filename || entry.document;
+    var title = displayTitle(entry);
     html += '<div class="timeline-item">';
     html += '<div><strong>' + escapeHtml(title) + '</strong> &mdash; ' + renderProgressBar(entry.percentage) + '</div>';
     html += '<div class="timeline-meta">' + formatTime(entry.timestamp || entry.created_at) + ' &middot; ' + escapeHtml(entry.device || '') + '</div>';
