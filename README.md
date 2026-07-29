@@ -1,35 +1,93 @@
-# Koreader Position Sync (Cloudflare Workers)
+# KOReader Progress Sync (Cloudflare Workers)
 
-A Cloudflare Workers-based backend for KOReader Progress Sync.
+A Cloudflare Workers-based backend for KOReader Progress Sync, with metadata support, sync history, and a web dashboard.
 
 [![Deploy to Cloudflare](https://img.shields.io/badge/Deploy%21to-Cloudflare-blue)](https://deploy.workers.cloudflare.com/?url=https://github.com/boypt/koreader-sync-cf)
+
+## Features
+
+- **KOReader API** — Full compatibility with KOReader's Progress Sync plugin
+- **Book Metadata** — Stores `filename`, `title`, and `authors` sent by the KOReader client (optional, enabled via `send_metadata`)
+- **Sync History** — Every sync event is recorded in `sync_log` for complete history tracking
+- **Web Dashboard** — Browser-based UI at `/web` to view documents, sync history, and global timeline
 
 ## Contents
 
-- `src/index.js` — Worker entrypoint
+- `src/index.js` — Worker entrypoint (all routes, auth, DB, web UI)
 - `wrangler.toml` — Cloudflare Workers configuration
-- `migrations/001_create_tables.sql` — Example schema for the backing store (if used)
+- `migrations/001_create_tables.sql` — Core schema (users, documents)
+- `migrations/002_add_metadata_columns.sql` — Adds metadata columns to documents
+- `migrations/003_create_sync_log.sql` — Sync history table
+- `migrations/004_create_sessions.sql` — Web UI session table
 
-## Deploy options
-
-- Click the button below to create a new Worker from this repository in your Cloudflare account:
+## Deploy
 
 [![Deploy to Cloudflare](https://img.shields.io/badge/Deploy%21to-Cloudflare-blue)](https://deploy.workers.cloudflare.com/?url=https://github.com/boypt/koreader-sync-cf)
 
-`wrangler.toml` in this repository contains the configuration used for publishing. Adjust
-environment variables and bindings in the file before publishing if necessary.
+Or deploy manually:
+
+1. Create a D1 database: `bunx wrangler d1 create kosync`
+2. Add the `database_id` to `wrangler.toml`
+3. Apply migrations: `bunx wrangler d1 migrations apply kosync --remote`
+4. Deploy: `bun run deploy`
+
+## Local Development
+
+```bash
+bun install                    # or npm i --legacy-peer-deps
+bunx wrangler d1 migrations apply kosync --local
+bun run dev                    # starts at http://localhost:8787
+```
 
 ## Configuration (Optional)
 
-- `RECEIVE_RANDOM_DEVICE_ID`: Default False.
-Set it true to retrieve always a random device id to force a progress sync. This is usefull if you only sync your progress from one device and usually delete the *.sdr files with some cleaning tools.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPEN_REGISTRATIONS` | `true` | Allow new user registrations. Set `false` to disable. |
+| `RECEIVE_RANDOM_DEVICE_ID` | `false` | Return a random `device_id` on GET to force client resync. Useful for single-device sync with cleaning tools. |
 
-- `OPEN_REGISTRATIONS`: Default True.
-Enable/disable new registrations to the server. Useful if you want to run a private server for a few users, although it doesn't necessarily improve security by itself. Set to True (enabled) by default.
+## API Routes
 
-This opens a local preview of the Worker and forwards requests to `src/index.js`.
+### KOReader API (existing, unchanged)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/users/create` | Register. Body: `{username, password}` |
+| `GET` | `/users/auth` | Auth via headers `x-auth-user`, `x-auth-key` |
+| `PUT` | `/syncs/progress` | Push progress. Body: `{document, progress, percentage, device, device_id, metadata?}` |
+| `GET` | `/syncs/progress/:document` | Pull progress for a document |
+| `GET` | `/healthstatus` | Returns `{"message":"healthy"}` |
+
+The `metadata` field is optional. When present, it should be:
+```json
+{
+  "filename": "book.pdf",
+  "title": "Book Title",
+  "authors": "Author Name"
+}
+```
+
+### Web UI (new)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/web` | Login page |
+| `POST` | `/web/login` | Login. Body: `{username, password}`. Returns `{ok: true/false}`. Sets session cookie. |
+| `GET` | `/web/dashboard` | Dashboard with document list, sync history, and global timeline |
+| `GET` | `/web/logout` | Clear session, redirect to `/web` |
+| `GET` | `/web/api/documents` | JSON list of documents (requires session) |
+| `GET` | `/web/api/documents/:document/history` | JSON sync history for a document (requires session) |
+| `GET` | `/web/api/timeline` | JSON global timeline, last 100 events (requires session) |
+
+Session cookies are `HttpOnly; SameSite=Lax; Path=/web; Max-Age=86400` (24h). The `Secure` flag is added automatically on HTTPS connections.
+
+## Notes
+
+- Passwords are stored as plaintext (KOReader client sends MD5 hash — this is the protocol surface, do not change)
+- PUT with missing required fields returns `500 Unknown server error` (KOReader client protocol, do not change)
+- D1/SQLite does not enforce FOREIGN KEY constraints by default
+- The project uses plain JavaScript (no TypeScript) and has no CSS framework (plain HTML+CSS+JS inline)
 
 ## License
 
 This repository follows the LICENSE file included in the project root.
-
