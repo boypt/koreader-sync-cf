@@ -83,6 +83,60 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
   </form>
 </div>
 <script>
+function md5(input) {
+  var s = unescape(encodeURIComponent(input));
+  function rl(v, n) { return (v << n) | (v >>> (32 - n)); }
+  function au(x, y) {
+    var x8 = x & 0x80000000, y8 = y & 0x80000000, x4 = x & 0x40000000, y4 = y & 0x40000000;
+    var r = (x & 0x3FFFFFFF) + (y & 0x3FFFFFFF);
+    if (x4 & y4) return r ^ 0x80000000 ^ x8 ^ y8;
+    if (x4 | y4) { return (r & 0x40000000) ? (r ^ 0xC0000000 ^ x8 ^ y8) : (r ^ 0x40000000 ^ x8 ^ y8); }
+    return r ^ x8 ^ y8;
+  }
+  function F(x,y,z){return (x&y)|((~x)&z);}
+  function G(x,y,z){return (x&z)|(y&(~z));}
+  function H(x,y,z){return x^y^z;}
+  function I(x,y,z){return y^(x|(~z));}
+  function FF(a,b,c,d,x,s,t){a=au(a,au(au(F(b,c,d),x),t));return au(rl(a,s),b);}
+  function GG(a,b,c,d,x,s,t){a=au(a,au(au(G(b,c,d),x),t));return au(rl(a,s),b);}
+  function HH(a,b,c,d,x,s,t){a=au(a,au(au(H(b,c,d),x),t));return au(rl(a,s),b);}
+  function II(a,b,c,d,x,s,t){a=au(a,au(au(I(b,c,d),x),t));return au(rl(a,s),b);}
+  function toWords(str) {
+    var len = str.length, nW = (((len + 8) - ((len + 8) % 64)) / 64 + 1) * 16;
+    var wa = new Array(nW).fill(0), wc, pos, count = 0;
+    while (count < len) { wc = (count - count % 4) / 4; pos = (count % 4) * 8; wa[wc] |= (str.charCodeAt(count) << pos); count++; }
+    wc = (count - count % 4) / 4; pos = (count % 4) * 8;
+    wa[wc] |= (0x80 << pos); wa[nW - 2] = len << 3; wa[nW - 1] = len >>> 29;
+    return wa;
+  }
+  function toHex(w) {
+    var h = '0123456789abcdef', s = '';
+    for (var i = 0; i <= 3; i++) { var b = (w >>> (i * 8)) & 255; s += h[(b >> 4) & 0xF] + h[b & 0xF]; }
+    return s;
+  }
+  var x = toWords(s), a = 0x67452301, b = 0xEFCDAB89, c = 0x98BADCFE, d = 0x10325476;
+  for (var i = 0; i < x.length; i += 16) {
+    var oa = a, ob = b, oc = c, od = d;
+    a=FF(a,b,c,d,x[i],7,0xD76AA478);d=FF(d,a,b,c,x[i+1],12,0xE8C7B756);c=FF(c,d,a,b,x[i+2],17,0x242070DB);b=FF(b,c,d,a,x[i+3],22,0xC1BDCEEE);
+    a=FF(a,b,c,d,x[i+4],7,0xF57C0FAF);d=FF(d,a,b,c,x[i+5],12,0x4787C62A);c=FF(c,d,a,b,x[i+6],17,0xA8304613);b=FF(b,c,d,a,x[i+7],22,0xFD469501);
+    a=FF(a,b,c,d,x[i+8],7,0x698098D8);d=FF(d,a,b,c,x[i+9],12,0x8B44F7AF);c=FF(c,d,a,b,x[i+10],17,0xFFFF5BB1);b=FF(b,c,d,a,x[i+11],22,0x895CD7BE);
+    a=FF(a,b,c,d,x[i+12],7,0x6B901122);d=FF(d,a,b,c,x[i+13],12,0xFD987193);c=FF(c,d,a,b,x[i+14],17,0xA679438E);b=FF(b,c,d,a,x[i+15],22,0x49B40821);
+    a=GG(a,b,c,d,x[i+1],5,0xF61E2562);d=GG(d,a,b,c,x[i+6],9,0xC040B340);c=GG(c,d,a,b,x[i+11],14,0x265E5A51);b=GG(b,c,d,a,x[i],20,0xE9B6C7AA);
+    a=GG(a,b,c,d,x[i+5],5,0xD62F105D);d=GG(d,a,b,c,x[i+10],9,0x2441453);c=GG(c,d,a,b,x[i+15],14,0xD8A1E681);b=GG(b,c,d,a,x[i+4],20,0xE7D3FBC8);
+    a=GG(a,b,c,d,x[i+9],5,0x21E1CDE6);d=GG(d,a,b,c,x[i+14],9,0xC33707D6);c=GG(c,d,a,b,x[i+3],14,0xF4D50D87);b=GG(b,c,d,a,x[i+8],20,0x455A14ED);
+    a=GG(a,b,c,d,x[i+13],5,0xA9E3E905);d=GG(d,a,b,c,x[i+2],9,0xFCEFA3F8);c=GG(c,d,a,b,x[i+7],14,0x676F02D9);b=GG(b,c,d,a,x[i+12],20,0x8D2A4C8A);
+    a=HH(a,b,c,d,x[i+5],4,0xFFFA3942);d=HH(d,a,b,c,x[i+8],11,0x8771F681);c=HH(c,d,a,b,x[i+11],16,0x6D9D6122);b=HH(b,c,d,a,x[i+14],23,0xFDE5380C);
+    a=HH(a,b,c,d,x[i+1],4,0xA4BEEA44);d=HH(d,a,b,c,x[i+4],11,0x4BDECFA9);c=HH(c,d,a,b,x[i+7],16,0xF6BB4B60);b=HH(b,c,d,a,x[i+10],23,0xBEBFBC70);
+    a=HH(a,b,c,d,x[i+13],4,0x289B7EC6);d=HH(d,a,b,c,x[i],11,0xEAA127FA);c=HH(c,d,a,b,x[i+3],16,0xD4EF3085);b=HH(b,c,d,a,x[i+6],23,0x4881D05);
+    a=HH(a,b,c,d,x[i+9],4,0xD9D4D039);d=HH(d,a,b,c,x[i+12],11,0xE6DB99E5);c=HH(c,d,a,b,x[i+15],16,0x1FA27CF8);b=HH(b,c,d,a,x[i+2],23,0xC4AC5665);
+    a=II(a,b,c,d,x[i],6,0xF4292244);d=II(d,a,b,c,x[i+7],10,0x432AFF97);c=II(c,d,a,b,x[i+14],15,0xAB9423A7);b=II(b,c,d,a,x[i+5],21,0xFC93A039);
+    a=II(a,b,c,d,x[i+12],6,0x655B59C3);d=II(d,a,b,c,x[i+3],10,0x8F0CCC92);c=II(c,d,a,b,x[i+10],15,0xFFEFF47D);b=II(b,c,d,a,x[i+1],21,0x85845DD1);
+    a=II(a,b,c,d,x[i+8],6,0x6FA87E4F);d=II(d,a,b,c,x[i+15],10,0xFE2CE6E0);c=II(c,d,a,b,x[i+6],15,0xA3014314);b=II(b,c,d,a,x[i+13],21,0x4E0811A1);
+    a=II(a,b,c,d,x[i+4],6,0xF7537E82);d=II(d,a,b,c,x[i+11],10,0xBD3AF235);c=II(c,d,a,b,x[i+2],15,0x2AD7D2BB);b=II(b,c,d,a,x[i+9],21,0xEB86D391);
+    a=au(a,oa);b=au(b,ob);c=au(c,oc);d=au(d,od);
+  }
+  return toHex(a) + toHex(b) + toHex(c) + toHex(d);
+}
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const errorEl = document.getElementById('error');
@@ -92,7 +146,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       username: document.getElementById('username').value,
-      password: document.getElementById('password').value
+      password: md5(document.getElementById('password').value)
     })
   });
   const data = await res.json();
