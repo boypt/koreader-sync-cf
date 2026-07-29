@@ -8,10 +8,13 @@
   },
   "engines": {
     "node": ">=16"
-  }
-  ,
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260131.0",
     "wrangler": "^4.61.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "workerd@1.20260722.1": true
   }
 }
