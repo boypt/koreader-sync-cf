@@ -180,6 +180,10 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   table { width: 100%; border-collapse: collapse; }
   th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #eee; }
   th { font-weight: 600; color: #666; font-size: 0.875rem; }
+  th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  th.sortable:hover { color: #4a90d9; }
+  th.sortable .sort-ind { display: inline-block; margin-left: 0.25rem; opacity: 0.35; font-size: 0.75rem; }
+  th.sortable.sorted .sort-ind { opacity: 1; color: #4a90d9; }
   tr:hover { background: #f8f9fa; }
   .doc-row { cursor: pointer; }
   .doc-row.active { background: #e8f0fe; }
@@ -235,15 +239,70 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function loadDocuments() {
-  var data = await apiFetch('/web/api/documents');
+var documentsData = [];
+var docSort = { key: 'timestamp', dir: 'desc' };
+var activeDocId = null;
+
+function docSortValue(doc, key) {
+  if (key === 'title') return String(doc.title || doc.filename || doc.document || '').toLowerCase();
+  if (key === 'authors') return String(doc.authors || '').toLowerCase();
+  if (key === 'percentage') return Number(doc.percentage) || 0;
+  if (key === 'device') return String(doc.device || '').toLowerCase();
+  if (key === 'timestamp') return Number(doc.timestamp) || 0;
+  return '';
+}
+
+function sortDocuments(data) {
+  var key = docSort.key;
+  var dir = docSort.dir === 'asc' ? 1 : -1;
+  var numeric = key === 'percentage' || key === 'timestamp';
+  return data.slice().sort(function(a, b) {
+    var va = docSortValue(a, key);
+    var vb = docSortValue(b, key);
+    if (numeric) return (va - vb) * dir;
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  });
+}
+
+function sortIndicator(key) {
+  if (docSort.key !== key) return '<span class="sort-ind">&#8597;</span>';
+  return docSort.dir === 'asc'
+    ? '<span class="sort-ind">&#9650;</span>'
+    : '<span class="sort-ind">&#9660;</span>';
+}
+
+function thClass(key) {
+  return 'sortable' + (docSort.key === key ? ' sorted' : '');
+}
+
+function setDocSort(key) {
+  if (docSort.key === key) {
+    docSort.dir = docSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    docSort.key = key;
+    docSort.dir = (key === 'timestamp' || key === 'percentage') ? 'desc' : 'asc';
+  }
+  renderDocuments();
+}
+
+function renderDocuments() {
   var el = document.getElementById('documentsContent');
-  if (!data || !data.length) { el.innerHTML = '<div class="empty">No documents yet</div>'; return; }
-  var html = '<table><thead><tr><th>Title</th><th>Authors</th><th>Progress</th><th>Device</th><th>Last Sync</th></tr></thead><tbody>';
+  if (!documentsData.length) { el.innerHTML = '<div class="empty">No documents yet</div>'; return; }
+  var data = sortDocuments(documentsData);
+  var html = '<table><thead><tr>';
+  html += '<th class="' + thClass('title') + '" onclick="setDocSort(\\'title\\')">Title' + sortIndicator('title') + '</th>';
+  html += '<th class="' + thClass('authors') + '" onclick="setDocSort(\\'authors\\')">Authors' + sortIndicator('authors') + '</th>';
+  html += '<th class="' + thClass('percentage') + '" onclick="setDocSort(\\'percentage\\')">Progress' + sortIndicator('percentage') + '</th>';
+  html += '<th class="' + thClass('device') + '" onclick="setDocSort(\\'device\\')">Device' + sortIndicator('device') + '</th>';
+  html += '<th class="' + thClass('timestamp') + '" onclick="setDocSort(\\'timestamp\\')">Last Sync' + sortIndicator('timestamp') + '</th>';
+  html += '</tr></thead><tbody>';
   data.forEach(function(doc) {
     var title = doc.title || doc.filename || doc.document;
     var authors = doc.authors || '';
-    html += '<tr class="doc-row" onclick="loadHistory(\\'' + encodeURIComponent(doc.document) + '\\', this)">';
+    var active = activeDocId === doc.document ? ' active' : '';
+    html += '<tr class="doc-row' + active + '" onclick="loadHistory(\\'' + encodeURIComponent(doc.document) + '\\', this)">';
     html += '<td>' + escapeHtml(title) + '</td>';
     html += '<td>' + escapeHtml(authors) + '</td>';
     html += '<td>' + renderProgressBar(doc.percentage) + '</td>';
@@ -255,7 +314,14 @@ async function loadDocuments() {
   el.innerHTML = html;
 }
 
+async function loadDocuments() {
+  var data = await apiFetch('/web/api/documents');
+  documentsData = data || [];
+  renderDocuments();
+}
+
 async function loadHistory(docEncoded, rowEl) {
+  activeDocId = decodeURIComponent(docEncoded);
   var rows = document.querySelectorAll('.doc-row');
   for (var i = 0; i < rows.length; i++) rows[i].classList.remove('active');
   if (rowEl) rowEl.classList.add('active');
