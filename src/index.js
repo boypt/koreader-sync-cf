@@ -231,10 +231,10 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     font-size: 0.95rem;
   }
 
-  /* —— Split workspace: library + history —— */
+  /* —— Library workspace —— */
   .dash-workspace {
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    grid-template-columns: 1fr;
     gap: var(--dash-gap);
     align-items: start;
     margin-bottom: var(--dash-gap);
@@ -285,17 +285,75 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     margin: 0;
   }
 
-  .panel-history {
-    position: sticky;
-    top: calc(var(--dash-nav-h) + 0.75rem);
-  }
-  .panel-history .panel-body {
-    max-height: min(70vh, 720px);
-    overflow: auto;
-  }
-
   .panel-insights .panel-header {
     align-items: center;
+  }
+
+  /* —— History modal —— */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .modal-overlay:not([hidden]) {
+    display: flex;
+  }
+  .modal-panel {
+    background: var(--pico-card-background-color, var(--pico-background-color));
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--dash-radius);
+    width: min(90vw, 800px);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    min-width: 0;
+    overflow: hidden;
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1.15rem 0.85rem;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    background: color-mix(in srgb, var(--pico-card-sectioning-background-color, var(--pico-background-color)) 70%, transparent);
+  }
+  .modal-header h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--pico-muted-color);
+    padding: 0 0.25rem;
+    line-height: 1;
+    border-radius: 0.35rem;
+    margin: 0;
+    width: auto;
+    flex-shrink: 0;
+  }
+  .modal-close:hover {
+    color: var(--pico-color);
+    background: color-mix(in srgb, var(--pico-muted-border-color) 30%, transparent);
+  }
+  .modal-body {
+    padding: 0.85rem 1rem 1rem;
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
   }
 
   /* —— Tables & rows —— */
@@ -404,15 +462,6 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 
   /* —— Responsive layout —— */
   @media (max-width: 992px) {
-    .dash-workspace {
-      grid-template-columns: 1fr;
-    }
-    .panel-history {
-      position: static;
-    }
-    .panel-history .panel-body {
-      max-height: none;
-    }
     .charts-grid {
       grid-template-columns: 1fr;
     }
@@ -426,6 +475,10 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     .dash-actions button:not(.btn-icon) {
       padding: 0.4rem 0.55rem;
       font-size: 0.8rem;
+    }
+    .modal-panel {
+      width: 95vw;
+      max-height: 90vh;
     }
   }
 </style>
@@ -457,7 +510,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
         <div>
           <span class="panel-kicker">Library</span>
           <h2 id="docs-heading">Documents</h2>
-          <p class="panel-hint">Click a row to load sync history</p>
+          <p class="panel-hint">Click a row to view sync history</p>
         </div>
       </div>
       <div class="panel-body">
@@ -466,26 +519,6 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
             <div class="empty">
               <span class="empty-title">Loading documents…</span>
               <span class="empty-sub">Fetching your synced library</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel panel-history" aria-labelledby="hist-heading">
-      <div class="panel-header">
-        <div>
-          <span class="panel-kicker">Detail</span>
-          <h2 id="hist-heading">Document history</h2>
-          <p class="panel-hint">Progress events for the selected title</p>
-        </div>
-      </div>
-      <div class="panel-body">
-        <div class="table-wrapper">
-          <div id="historyContent">
-            <div class="empty">
-              <span class="empty-title">No document selected</span>
-              <span class="empty-sub">Pick a title from the library to see its sync trail</span>
             </div>
           </div>
         </div>
@@ -544,6 +577,28 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       </div>
     </div>
   </section>
+
+  <div id="historyModal" class="modal-overlay" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <div>
+          <span class="panel-kicker">Detail</span>
+          <h2 id="modalTitle">Document history</h2>
+        </div>
+        <button type="button" class="modal-close" onclick="closeHistoryModal()" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-wrapper">
+          <div id="historyContent">
+            <div class="empty">
+              <span class="empty-title">Loading history…</span>
+              <span class="empty-sub">Fetching sync events for this document</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </main>
 <script src="//cdn.jsdelivr.net/npm/simple-datatables@latest/dist/umd/simple-datatables.js"></script>
 <script src="//cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -649,12 +704,25 @@ async function loadDocuments() {
 
 async function loadHistory(docEncoded, rowEl) {
   activeDocId = decodeURIComponent(docEncoded);
+  var modalTitle = 'Document history';
+  for (var d = 0; d < documentsData.length; d++) {
+    if (documentsData[d].document === activeDocId) {
+      modalTitle = displayTitle(documentsData[d]) || modalTitle;
+      break;
+    }
+  }
+  document.getElementById('modalTitle').textContent = modalTitle;
   var rows = document.querySelectorAll('.doc-row');
   for (var i = 0; i < rows.length; i++) rows[i].classList.remove('active');
   if (rowEl) rowEl.classList.add('active');
-  var data = await apiFetch('/web/api/documents/' + docEncoded + '/history');
   var el = document.getElementById('historyContent');
-  if (!data || !data.length) { el.innerHTML = '<div class="empty">No history for this document</div>'; return; }
+  el.innerHTML = '<div class="empty"><span class="empty-title">Loading history…</span><span class="empty-sub">Fetching sync events for this document</span></div>';
+  document.getElementById('historyModal').removeAttribute('hidden');
+  var data = await apiFetch('/web/api/documents/' + docEncoded + '/history');
+  if (!data || !data.length) {
+    el.innerHTML = '<div class="empty">No history for this document</div>';
+    return;
+  }
   var html = '<table id="histTable" class="table">';
   html += '<thead><tr>';
   html += '<th>Progress</th>';
@@ -682,6 +750,17 @@ async function loadHistory(docEncoded, rowEl) {
     perPageSelect: [10, 25, 50]
   });
 }
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').setAttribute('hidden', '');
+}
+
+document.getElementById('historyModal').addEventListener('click', function(e) {
+  if (e.target === this) closeHistoryModal();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeHistoryModal();
+});
 
 function formatDuration(secs) {
   if (!secs || secs < 0) return '—';
