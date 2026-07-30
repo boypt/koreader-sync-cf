@@ -127,9 +127,229 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
 <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/simple-datatables@latest/dist/style.css">
 <style>
-  .dashboard-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; }
+  :root {
+    --dash-radius: 0.75rem;
+    --dash-gap: 1.25rem;
+    --dash-nav-h: 3.75rem;
+  }
+
+  body {
+    min-height: 100vh;
+    margin: 0;
+    background:
+      radial-gradient(1200px 500px at 10% -10%, color-mix(in srgb, var(--pico-primary) 14%, transparent), transparent 60%),
+      radial-gradient(900px 420px at 100% 0%, color-mix(in srgb, var(--pico-primary) 8%, transparent), transparent 55%),
+      var(--pico-background-color);
+  }
+
+  /* —— Top bar —— */
+  .dash-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: var(--dash-nav-h);
+    padding: 0.65rem 1.25rem;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    background: color-mix(in srgb, var(--pico-background-color) 82%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .dash-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+  .dash-mark {
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: grid;
+    place-items: center;
+    border-radius: 0.55rem;
+    background: var(--pico-primary);
+    color: var(--pico-primary-inverse, #fff);
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--pico-primary) 35%, transparent);
+  }
+  .dash-brand-text { min-width: 0; }
+  .dash-brand-text strong {
+    display: block;
+    font-size: 1.05rem;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  .dash-brand-text span {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+    line-height: 1.3;
+  }
+  .dash-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .dash-actions button {
+    margin: 0;
+    width: auto;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+  }
+  .dash-actions .btn-icon {
+    width: 2.4rem;
+    padding: 0.4rem;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  /* —— Page shell —— */
+  .dash-main {
+    width: min(1280px, 100%);
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 2.5rem;
+  }
+  .dash-intro {
+    margin-bottom: 1.25rem;
+  }
+  .dash-intro h1 {
+    margin: 0 0 0.25rem;
+    font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+  }
+  .dash-intro p {
+    margin: 0;
+    color: var(--pico-muted-color);
+    font-size: 0.95rem;
+  }
+
+  /* —— Split workspace: library + history —— */
+  .dash-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: var(--dash-gap);
+    align-items: start;
+    margin-bottom: var(--dash-gap);
+  }
+
+  .panel {
+    background: var(--pico-card-background-color, var(--pico-background-color));
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--dash-radius);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--pico-color) 4%, transparent);
+    overflow: hidden;
+    min-width: 0;
+  }
+  .panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem 1.15rem 0.85rem;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    background: color-mix(in srgb, var(--pico-card-sectioning-background-color, var(--pico-background-color)) 70%, transparent);
+  }
+  .panel-header h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+  .panel-kicker {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pico-primary);
+  }
+  .panel-hint {
+    margin: 0.2rem 0 0;
+    font-size: 0.8rem;
+    color: var(--pico-muted-color);
+    line-height: 1.35;
+  }
+  .panel-body {
+    padding: 0.85rem 1rem 1rem;
+  }
+  .panel-body .table-wrapper {
+    margin: 0;
+  }
+
+  .panel-history {
+    position: sticky;
+    top: calc(var(--dash-nav-h) + 0.75rem);
+  }
+  .panel-history .panel-body {
+    max-height: min(70vh, 720px);
+    overflow: auto;
+  }
+
+  .panel-insights .panel-header {
+    align-items: center;
+  }
+
+  /* —— Tables & rows —— */
   .table-wrapper { overflow-x: auto; }
-  .progress-inline { width: 80px; vertical-align: middle; margin-right: 0.5rem; }
+  .progress-inline {
+    width: 80px;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+  }
+  table.table { margin-bottom: 0; }
+  .doc-row { cursor: pointer; transition: background 0.15s ease; }
+  .doc-row:hover { background: color-mix(in srgb, var(--pico-primary) 6%, transparent); }
+  .doc-row.active {
+    background: color-mix(in srgb, var(--pico-primary) 12%, transparent);
+    box-shadow: inset 3px 0 0 var(--pico-primary);
+  }
+
+  /* —— Empty / loading states —— */
+  .empty {
+    text-align: center;
+    color: var(--pico-muted-color);
+    padding: 2.5rem 1.25rem;
+    border: 1px dashed var(--pico-muted-border-color);
+    border-radius: calc(var(--dash-radius) - 0.15rem);
+    background: color-mix(in srgb, var(--pico-muted-border-color) 18%, transparent);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+  .empty-title {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-weight: 600;
+    color: var(--pico-color);
+  }
+  .empty-sub {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--pico-muted-color);
+  }
+
+  .chart-section { display: none; }
+
+  /* —— DataTables controls sizing —— */
+  .datatable-top input,
+  .datatable-top select {
+    max-width: 220px;
+    font-size: 0.85rem;
+    padding: 0.35rem 0.65rem;
+    height: auto;
+    margin-bottom: 0;
+    border-radius: var(--pico-border-radius);
+  }
+
+  /* —— DataTables mobile —— */
   @media (max-width: 576px) {
     .datatable-top > nav,
     .datatable-top > div {
@@ -142,37 +362,115 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       margin-bottom: 0;
     }
   }
-  .empty { text-align: center; color: var(--pico-color-muted, #999); padding: 2rem; }
-  .doc-row { cursor: pointer; }
-  .doc-row.active { background: var(--pico-color-primary-background-muted, #e8f0fe); }
-  .chart-section { display: none; }
+
+  /* —— Responsive layout —— */
+  @media (max-width: 992px) {
+    .dash-workspace {
+      grid-template-columns: 1fr;
+    }
+    .panel-history {
+      position: static;
+    }
+    .panel-history .panel-body {
+      max-height: none;
+    }
+  }
+  @media (max-width: 576px) {
+    .dash-nav { padding: 0.55rem 0.85rem; }
+    .dash-brand-text span { display: none; }
+    .dash-main { padding: 1rem 0.85rem 2rem; }
+    .panel-header { padding: 0.85rem 0.9rem; }
+    .panel-body { padding: 0.65rem 0.75rem 0.85rem; }
+    .dash-actions button:not(.btn-icon) {
+      padding: 0.4rem 0.55rem;
+      font-size: 0.8rem;
+    }
+  }
 </style>
 </head>
 <body>
-<header class="dashboard-header">
-  <h1>KOReader Sync</h1>
-  <div>
-    <button onclick="toggleTheme()" class="outline" style="padding:0.38rem;font-size:0.85rem">&#9681;</button>
-    <button onclick="logout()" class="outline" style="margin:1rem;padding:0.38rem;font-size:0.85rem">Logout</button>
+<header class="dash-nav">
+  <div class="dash-brand">
+    <div class="dash-mark" aria-hidden="true">K</div>
+    <div class="dash-brand-text">
+      <strong>KOReader Sync</strong>
+      <span>Progress across your devices</span>
+    </div>
+  </div>
+  <div class="dash-actions">
+    <button type="button" onclick="toggleTheme()" class="outline btn-icon" title="Toggle theme" aria-label="Toggle theme">&#9681;</button>
+    <button type="button" onclick="logout()" class="outline secondary">Logout</button>
   </div>
 </header>
-<main class="container">
-  <section>
-    <h2>Documents</h2>
-    <div class="table-wrapper">
-      <div id="documentsContent"><div class="empty">Loading...</div></div>
+
+<main class="dash-main">
+  <div class="dash-intro">
+    <h1>Your library</h1>
+    <p>Select a document to inspect its sync history. Reading duration sits below for the longer view.</p>
+  </div>
+
+  <div class="dash-workspace">
+    <section class="panel panel-library" aria-labelledby="docs-heading">
+      <div class="panel-header">
+        <div>
+          <span class="panel-kicker">Library</span>
+          <h2 id="docs-heading">Documents</h2>
+          <p class="panel-hint">Click a row to load sync history</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="table-wrapper">
+          <div id="documentsContent">
+            <div class="empty">
+              <span class="empty-title">Loading documents…</span>
+              <span class="empty-sub">Fetching your synced library</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel panel-history" aria-labelledby="hist-heading">
+      <div class="panel-header">
+        <div>
+          <span class="panel-kicker">Detail</span>
+          <h2 id="hist-heading">Document history</h2>
+          <p class="panel-hint">Progress events for the selected title</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="table-wrapper">
+          <div id="historyContent">
+            <div class="empty">
+              <span class="empty-title">No document selected</span>
+              <span class="empty-sub">Pick a title from the library to see its sync trail</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel panel-insights" aria-labelledby="stats-heading">
+    <div class="panel-header">
+      <div>
+        <span class="panel-kicker">Insights</span>
+        <h2 id="stats-heading">Reading duration</h2>
+        <p class="panel-hint">Time span from first to last sync, per document</p>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="table-wrapper">
+        <div id="timelineContent">
+          <div class="empty">
+            <span class="empty-title">Loading reading stats…</span>
+            <span class="empty-sub">Crunching durations and event counts</span>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
-  <section>
-    <h2>Document History</h2>
-    <div class="table-wrapper">
-      <div id="historyContent"><div class="empty">Select a document to view history</div></div>
-    </div>
-  </section>
-  <section>
-    <h2>Reading Duration</h2>
-    <div id="timelineContent"><div class="empty">Loading...</div></div>
-  </section>
+
   <section class="chart-section">
     <h2>Statistics</h2>
     <canvas id="statsChart"></canvas>
