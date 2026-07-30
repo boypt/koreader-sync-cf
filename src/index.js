@@ -44,10 +44,10 @@ async function getSessionUser(db, request) {
   const res = await db.prepare(
     `SELECT s.username FROM sessions s
      INNER JOIN users u ON s.username = u.username
-     WHERE s.token = ? AND s.created_at > unixepoch() - 86400`
+     WHERE s.token = ? AND s.created_at > unixepoch() - 2592000`
   ).bind(token).all();
   if (res.results && res.results.length) return res.results[0].username;
-  await db.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
+  await db.prepare('DELETE FROM sessions WHERE created_at < unixepoch() - 2592000').run();
   return null;
 }
 
@@ -1209,7 +1209,7 @@ export default {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          'Set-Cookie': `session_token=${token}; HttpOnly; SameSite=Lax; Path=/web; Max-Age=86400${cookieSecure}`
+          'Set-Cookie': `session_token=${token}; HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000${cookieSecure}`
         }
       });
     }
