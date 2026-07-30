@@ -63,12 +63,12 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
   .login-card { max-width: 360px; margin: 10vh auto; }
   .login-card h1 { text-align: center; }
   .error-msg { color: var(--pico-color-red-500, #d32f2f); text-align: center; margin-bottom: 1rem; display: none; }
-  .theme-toggle { position: absolute; top: 1rem; right: 1rem; opacity: 0.7; cursor: pointer; }
+  .theme-toggle { position: absolute; top: 1rem; right: 1rem; padding: 0.38rem; font-size: 0.85rem; margin: 0; }
 </style>
 </head>
 <body>
 <div class="login-card">
-  <a href="#" class="theme-toggle" onclick="toggleTheme();return false;">&#9681;</a>
+  <button onclick="toggleTheme()" class="outline theme-toggle">&#9681;</button>
   <h1>KOReader Sync</h1>
   <div class="error-msg" id="error"></div>
   <form id="loginForm">
@@ -130,13 +130,9 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   .dashboard-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; }
   .table-wrapper { overflow-x: auto; }
   .progress-inline { width: 80px; vertical-align: middle; margin-right: 0.5rem; }
-  .timeline-item { padding: 0.75rem 0; border-bottom: 1px solid var(--pico-color-muted-border-color, #eee); }
-  .timeline-item:last-child { border-bottom: none; }
-  .timeline-meta { font-size: 0.875rem; color: var(--pico-color-muted, #888); }
   .empty { text-align: center; color: var(--pico-color-muted, #999); padding: 2rem; }
   .doc-row { cursor: pointer; }
   .doc-row.active { background: var(--pico-color-primary-background-muted, #e8f0fe); }
-  .theme-toggle { opacity: 0.7; cursor: pointer; }
   .chart-section { display: none; }
 </style>
 </head>
@@ -144,7 +140,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 <header class="dashboard-header">
   <h1>KOReader Sync</h1>
   <div>
-    <a href="#" class="theme-toggle" onclick="toggleTheme();return false;">&#9681;</a>
+    <button onclick="toggleTheme()" class="outline" style="padding:0.38rem;font-size:0.85rem">&#9681;</button>
     <button onclick="logout()" class="outline" style="margin:1rem;padding:0.38rem;font-size:0.85rem">Logout</button>
   </div>
 </header>
@@ -162,7 +158,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     </div>
   </section>
   <section>
-    <h2>Global Timeline</h2>
+    <h2>Reading Duration</h2>
     <div id="timelineContent"><div class="empty">Loading...</div></div>
   </section>
   <section class="chart-section">
@@ -230,6 +226,7 @@ var documentsData = [];
 var activeDocId = null;
 var docsTable = null;
 var histTable = null;
+var statsTable = null;
 
 function renderDocuments() {
   var el = document.getElementById('documentsContent');
@@ -307,24 +304,60 @@ async function loadHistory(docEncoded, rowEl) {
   });
 }
 
-async function loadTimeline() {
-  var data = await apiFetch('/web/api/timeline');
+function formatDuration(secs) {
+  if (!secs || secs < 0) return '—';
+  var days = Math.floor(secs / 86400);
+  var hours = Math.floor((secs % 86400) / 3600);
+  var minutes = Math.floor((secs % 3600) / 60);
+  var parts = [];
+  if (days > 0) parts.push(days + 'd');
+  if (hours > 0) parts.push(hours + 'h');
+  if (minutes > 0 || parts.length === 0) parts.push(minutes + 'm');
+  return parts.join(' ');
+}
+
+async function loadReadingStats() {
+  var data = await apiFetch('/web/api/reading-stats');
   var el = document.getElementById('timelineContent');
-  if (!data || !data.length) { el.innerHTML = '<div class="empty">No sync events yet</div>'; return; }
-  var html = '';
-  data.forEach(function(entry) {
-    var title = displayTitle(entry);
-    html += '<div class="timeline-item">';
-    html += '<div><strong>' + escapeHtml(title) + '</strong> &mdash; ' + renderProgressBar(entry.percentage) + '</div>';
-    html += '<div class="timeline-meta">' + relativeTime(entry.timestamp || entry.created_at) + ' &middot; ' + escapeHtml(entry.device || '') + '</div>';
-    if (entry.authors) html += '<div class="timeline-meta">Authors: ' + escapeHtml(entry.authors) + '</div>';
-    html += '</div>';
+  if (!data || !data.length) { el.innerHTML = '<div class="empty">No reading data yet</div>'; return; }
+  var html = '<table id="readingStatsTable" class="table">';
+  html += '<thead><tr>';
+  html += '<th>Title</th>';
+  html += '<th>Authors</th>';
+  html += '<th>First Sync</th>';
+  html += '<th>Last Sync</th>';
+  html += '<th>Duration</th>';
+  html += '<th>Latest Progress</th>';
+  html += '<th>Events</th>';
+  html += '</tr></thead><tbody>';
+  data.forEach(function(item) {
+    var title = item.display_title || '';
+    if (/^[0-9a-f]{32}$/i.test(title)) {
+      title = title.substring(0, 8) + '…';
+    }
+    html += '<tr>';
+    html += '<td>' + escapeHtml(title) + '</td>';
+    html += '<td>' + escapeHtml(item.authors || '') + '</td>';
+    html += '<td data-order="' + (item.first_sync || 0) + '">' + relativeTime(item.first_sync) + '</td>';
+    html += '<td data-order="' + (item.last_sync || 0) + '">' + relativeTime(item.last_sync) + '</td>';
+    html += '<td data-order="' + (item.duration_seconds || 0) + '"><span title="' + (item.duration_seconds || 0) + ' seconds">' + formatDuration(item.duration_seconds) + '</span></td>';
+    html += '<td>' + renderProgressBar(item.latest_percentage) + '</td>';
+    html += '<td>' + escapeHtml(String(item.event_count || 0)) + '</td>';
+    html += '</tr>';
   });
+  html += '</tbody></table>';
   el.innerHTML = html;
+  if (statsTable) statsTable.destroy();
+  statsTable = new simpleDatatables.DataTable('#readingStatsTable', {
+    searchable: true,
+    fixedHeight: false,
+    perPage: 10,
+    perPageSelect: [10, 25, 50]
+  });
 }
 
 loadDocuments();
-loadTimeline();
+loadReadingStats();
 </script>
 </body>
 </html>`;
@@ -485,6 +518,31 @@ export default {
       const res = await db.prepare(
         'SELECT * FROM sync_log WHERE username = ? ORDER BY created_at DESC LIMIT 100'
       ).bind(sessionUser).all();
+      return JSON_RESPONSE(200, res.results || []);
+    }
+
+    // GET /web/api/reading-stats
+    if (method === 'GET' && pathname === '/web/api/reading-stats') {
+      const sessionUser = await getSessionUser(db, request);
+      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+      const res = await db.prepare(`
+        SELECT
+          COALESCE(NULLIF(title, ''), NULLIF(filename, ''), document) AS display_title,
+          MIN(timestamp) AS first_sync,
+          MAX(timestamp) AS last_sync,
+          (MAX(timestamp) - MIN(timestamp)) AS duration_seconds,
+          COUNT(*) AS event_count,
+          MAX(authors) AS authors,
+          (SELECT percentage FROM sync_log s2
+             WHERE s2.username = sync_log.username
+               AND s2.document = sync_log.document
+               AND COALESCE(NULLIF(s2.title, ''), NULLIF(s2.filename, ''), s2.document) = COALESCE(NULLIF(sync_log.title, ''), NULLIF(sync_log.filename, ''), sync_log.document)
+             ORDER BY s2.timestamp DESC LIMIT 1) AS latest_percentage
+        FROM sync_log
+        WHERE username = ?
+        GROUP BY COALESCE(NULLIF(title, ''), NULLIF(filename, ''), document)
+        ORDER BY duration_seconds DESC
+      `).bind(sessionUser).all();
       return JSON_RESPONSE(200, res.results || []);
     }
 
