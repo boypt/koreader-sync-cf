@@ -130,6 +130,18 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   .dashboard-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; }
   .table-wrapper { overflow-x: auto; }
   .progress-inline { width: 80px; vertical-align: middle; margin-right: 0.5rem; }
+  @media (max-width: 576px) {
+    .datatable-top > nav,
+    .datatable-top > div {
+      float: none !important;
+      width: 100%;
+      margin: 0 0 0.5rem;
+    }
+    .datatable-top > nav:last-child,
+    .datatable-top > div:last-child {
+      margin-bottom: 0;
+    }
+  }
   .empty { text-align: center; color: var(--pico-color-muted, #999); padding: 2rem; }
   .doc-row { cursor: pointer; }
   .doc-row.active { background: var(--pico-color-primary-background-muted, #e8f0fe); }
