@@ -445,6 +445,25 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     border-radius: var(--pico-border-radius);
   }
 
+  .datatable-selector {
+    font-size: 0.78rem;
+    color: var(--pico-muted-color);
+    background: transparent;
+    border-color: transparent;
+    padding: 0.25rem 2.5em 0.25rem 0.4rem !important;
+    max-width: none;
+    width: auto;
+    cursor: pointer;
+  }
+  .datatable-selector:hover {
+    border-color: var(--pico-muted-border-color);
+  }
+
+  .datatable-info {
+    font-size: 0.78rem;
+    color: var(--pico-muted-color);
+  }
+
   /* —— DataTables mobile —— */
   @media (max-width: 576px) {
     .datatable-top > nav,
