@@ -667,7 +667,7 @@ async function loadHistory(docEncoded, rowEl) {
     html += '<tr>';
     html += '<td>' + renderProgressBar(entry.percentage) + '</td>';
     html += '<td>' + escapeHtml(entry.device || '') + '</td>';
-    html += '<td>' + escapeHtml(entry.device_id || '') + '</td>';
+    html += '<td>' + (entry.device_id ? '<span title="' + escapeHtml(entry.device_id) + '">' + escapeHtml(entry.device_id.substring(0, 4)) + '…</span>' : '') + '</td>';
     html += '<td data-order="' + (entry.timestamp || 0) + '">' + relativeTime(entry.timestamp) + '</td>';
     html += '<td data-order="' + (entry.created_at || 0) + '">' + relativeTime(entry.created_at) + '</td>';
     html += '</tr>';
