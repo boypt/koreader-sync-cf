@@ -9,7 +9,9 @@ A Cloudflare Workers-based backend for KOReader Progress Sync, with metadata sup
 - **KOReader API** — Full compatibility with KOReader's Progress Sync plugin
 - **Book Metadata** — Stores `filename`, `title`, and `authors` sent by the KOReader client (optional, enabled via `send_metadata`)
 - **Sync History** — Every sync event is recorded in `sync_log` for complete history tracking
-- **Web Dashboard** — Browser-based UI at `/web` to view documents, sync history, and global timeline
+- **Web Dashboard** — Browser-based UI at `/web` to view documents, sync history, and reading statistics
+- **Statistics Charts** — Device activity and per-book reading duration charts powered by Chart.js
+- **Theme Support** — Auto/light/dark theme via PicoCSS v2 with a dropdown selector
 
 ## Contents
 
@@ -67,26 +69,29 @@ The `metadata` field is optional. When present, it should be:
 }
 ```
 
+> **Note:** Book metadata support requires KOReader 2026.07 "Sailing Walrus" or later.
+
 ### Web UI (new)
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/web` | Login page |
 | `POST` | `/web/login` | Login. Body: `{username, password}`. Returns `{ok: true/false}`. Sets session cookie. |
-| `GET` | `/web/dashboard` | Dashboard with document list, sync history, and global timeline |
+| `GET` | `/web/dashboard` | Dashboard with document list, document history modal, reading duration table, and statistics charts |
 | `GET` | `/web/logout` | Clear session, redirect to `/web` |
 | `GET` | `/web/api/documents` | JSON list of documents (requires session) |
 | `GET` | `/web/api/documents/:document/history` | JSON sync history for a document (requires session) |
-| `GET` | `/web/api/timeline` | JSON global timeline, last 100 events (requires session) |
+| `GET` | `/web/api/reading-stats` | JSON reading duration stats per document (requires session) |
+| `GET` | `/web/api/device-stats` | JSON sync count and duration per device (requires session) |
 
-Session cookies are `HttpOnly; SameSite=Lax; Path=/web; Max-Age=86400` (24h). The `Secure` flag is added automatically on HTTPS connections.
+Session cookies are `HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000` (30 days). The `Secure` flag is added automatically on HTTPS connections.
 
 ## Notes
 
 - Passwords are stored as plaintext (KOReader client sends MD5 hash — this is the protocol surface, do not change)
 - PUT with missing required fields returns `500 Unknown server error` (KOReader client protocol, do not change)
 - D1/SQLite does not enforce FOREIGN KEY constraints by default
-- The project uses plain JavaScript (no TypeScript) and has no CSS framework (plain HTML+CSS+JS inline)
+- The project uses plain JavaScript (no TypeScript) with PicoCSS v2, Simple-DataTables, Day.js, and Chart.js v4 loaded via CDN
 
 ## License
 
