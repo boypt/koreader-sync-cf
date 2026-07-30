@@ -336,7 +336,46 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     color: var(--pico-muted-color);
   }
 
-  .chart-section { display: none; }
+  /* —— Charts —— */
+  .dash-main > .panel + .panel {
+    margin-top: var(--dash-gap);
+  }
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--dash-gap);
+    align-items: stretch;
+  }
+  .chart-card {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+  .chart-card h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+  }
+  .chart-host {
+    flex: 1;
+    min-height: 280px;
+  }
+  .chart-canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 280px;
+  }
+  .chart-host .empty {
+    height: 100%;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
 
   /* —— DataTables controls sizing —— */
   .datatable-top input,
@@ -373,6 +412,9 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     }
     .panel-history .panel-body {
       max-height: none;
+    }
+    .charts-grid {
+      grid-template-columns: 1fr;
     }
   }
   @media (max-width: 576px) {
@@ -471,9 +513,36 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     </div>
   </section>
 
-  <section class="chart-section">
-    <h2>Statistics</h2>
-    <canvas id="statsChart"></canvas>
+  <section class="panel panel-charts" aria-labelledby="charts-heading">
+    <div class="panel-header">
+      <div>
+        <span class="panel-kicker">Statistics</span>
+        <h2 id="charts-heading">Charts</h2>
+        <p class="panel-hint">Device sync counts and per-book reading time</p>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>Device activity</h3>
+          <div id="deviceChartHost" class="chart-host">
+            <div class="empty">
+              <span class="empty-title">Loading device stats…</span>
+              <span class="empty-sub">Counting syncs per device</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h3>Top books by duration</h3>
+          <div id="booksChartHost" class="chart-host">
+            <div class="empty">
+              <span class="empty-title">Loading book stats…</span>
+              <span class="empty-sub">Ranking reading time</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 </main>
 <script src="//cdn.jsdelivr.net/npm/simple-datatables@latest/dist/umd/simple-datatables.js"></script>
@@ -666,8 +735,159 @@ async function loadReadingStats() {
   });
 }
 
+async function loadCharts() {
+  var deviceHost = document.getElementById('deviceChartHost');
+  var booksHost = document.getElementById('booksChartHost');
+  var deviceData = await apiFetch('/web/api/device-stats');
+  var readingData = await apiFetch('/web/api/reading-stats');
+
+  var styles = getComputedStyle(document.documentElement);
+  var primary = (styles.getPropertyValue('--pico-primary') || '').trim() || '#0172ad';
+  var muted = (styles.getPropertyValue('--pico-muted-color') || '').trim() || '#999';
+  var gridColor = (styles.getPropertyValue('--pico-muted-border-color') || '').trim() || 'rgba(0,0,0,0.1)';
+  var textColor = (styles.getPropertyValue('--pico-color') || '').trim() || '#373c44';
+
+  Chart.defaults.responsive = true;
+  Chart.defaults.maintainAspectRatio = false;
+  Chart.defaults.color = muted;
+  Chart.defaults.borderColor = gridColor;
+  Chart.defaults.font.family = styles.fontFamily || 'system-ui, sans-serif';
+
+  if (!deviceData || !deviceData.length) {
+    deviceHost.innerHTML = '<div class="empty"><span class="empty-title">No device data yet</span><span class="empty-sub">Sync from a device to see activity here</span></div>';
+  } else {
+    deviceHost.innerHTML = '<div class="chart-canvas-wrap"><canvas id="deviceChart"></canvas></div>';
+    var deviceLabels = deviceData.map(function(d) {
+      var name = d.device || 'Unknown';
+      var id = d.device_id || '';
+      if (id && id.length > 10) id = id.substring(0, 8) + '…';
+      return id ? (name + ' (' + id + ')') : name;
+    });
+    var deviceCounts = deviceData.map(function(d) { return d.sync_count || 0; });
+    new Chart(document.getElementById('deviceChart'), {
+      type: 'bar',
+      data: {
+        labels: deviceLabels,
+        datasets: [{
+          label: 'Syncs',
+          data: deviceCounts,
+          backgroundColor: primary,
+          borderColor: primary,
+          borderRadius: 6,
+          maxBarThickness: 48
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return (ctx.parsed.y || 0) + ' syncs'; }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: muted, maxRotation: 45, minRotation: 0 },
+            grid: { display: false },
+            border: { color: gridColor }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              color: muted,
+              precision: 0
+            },
+            grid: { color: gridColor },
+            border: { color: gridColor },
+            title: {
+              display: true,
+              text: 'Sync count',
+              color: muted
+            }
+          }
+        }
+      }
+    });
+  }
+
+  var books = (readingData || []).slice().filter(function(item) {
+    return (item.duration_seconds || 0) > 0;
+  }).sort(function(a, b) {
+    return (b.duration_seconds || 0) - (a.duration_seconds || 0);
+  }).slice(0, 10);
+
+  if (!books.length) {
+    booksHost.innerHTML = '<div class="empty"><span class="empty-title">No reading duration yet</span><span class="empty-sub">Duration appears after multiple syncs on a book</span></div>';
+  } else {
+    booksHost.innerHTML = '<div class="chart-canvas-wrap"><canvas id="booksChart"></canvas></div>';
+    var bookLabels = books.map(function(item) {
+      var title = item.display_title || 'Untitled';
+      if (/^[0-9a-f]{32}$/i.test(title)) {
+        title = title.substring(0, 8) + '…';
+      }
+      if (title.length > 36) title = title.substring(0, 34) + '…';
+      return title;
+    });
+    var bookDurations = books.map(function(item) { return item.duration_seconds || 0; });
+    new Chart(document.getElementById('booksChart'), {
+      type: 'bar',
+      data: {
+        labels: bookLabels,
+        datasets: [{
+          label: 'Duration',
+          data: bookDurations,
+          backgroundColor: primary,
+          borderColor: primary,
+          borderRadius: 6,
+          maxBarThickness: 28
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                return formatDuration(ctx.parsed.x || 0);
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            ticks: {
+              color: muted,
+              callback: function(value) { return formatDuration(value); }
+            },
+            grid: { color: gridColor },
+            border: { color: gridColor },
+            title: {
+              display: true,
+              text: 'Reading duration',
+              color: muted
+            }
+          },
+          y: {
+            ticks: { color: textColor },
+            grid: { display: false },
+            border: { color: gridColor }
+          }
+        }
+      }
+    });
+  }
+}
+
 loadDocuments();
 loadReadingStats();
+loadCharts();
 </script>
 </body>
 </html>`;
@@ -852,6 +1072,24 @@ export default {
         WHERE username = ?
         GROUP BY COALESCE(NULLIF(title, ''), NULLIF(filename, ''), document)
         ORDER BY duration_seconds DESC
+      `).bind(sessionUser).all();
+      return JSON_RESPONSE(200, res.results || []);
+    }
+
+    // GET /web/api/device-stats
+    if (method === 'GET' && pathname === '/web/api/device-stats') {
+      const sessionUser = await getSessionUser(db, request);
+      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+      const res = await db.prepare(`
+        SELECT
+          device,
+          device_id,
+          COUNT(*) AS sync_count,
+          (MAX(timestamp) - MIN(timestamp)) AS total_duration_seconds
+        FROM sync_log
+        WHERE username = ?
+        GROUP BY device, device_id
+        ORDER BY sync_count DESC
       `).bind(sessionUser).all();
       return JSON_RESPONSE(200, res.results || []);
     }
