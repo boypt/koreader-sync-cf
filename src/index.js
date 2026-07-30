@@ -197,17 +197,16 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     gap: 0.5rem;
     flex-shrink: 0;
   }
+  .dash-actions select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: none;
+  }
   .dash-actions button {
     margin: 0;
     width: auto;
     padding: 0.4rem 0.75rem;
     font-size: 0.85rem;
-  }
-  .dash-actions .btn-icon {
-    width: 2.4rem;
-    padding: 0.4rem;
-    font-size: 1rem;
-    line-height: 1;
   }
 
   /* —— Page shell —— */
@@ -493,7 +492,11 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     </div>
   </div>
   <div class="dash-actions">
-    <button type="button" onclick="toggleTheme()" class="outline btn-icon" title="Toggle theme" aria-label="Toggle theme">&#9681;</button>
+    <select id="themeSelect" onchange="setTheme(this.value)" class="outline secondary" style="width:auto;margin:0;padding:0.4rem 0.65rem;font-size:0.85rem;height:auto;cursor:pointer">
+      <option value="auto">&#9788; Auto</option>
+      <option value="light">&#9788; Light</option>
+      <option value="dark">&#9790; Dark</option>
+    </select>
     <button type="button" onclick="logout()" class="outline secondary">Logout</button>
   </div>
 </header>
@@ -608,14 +611,14 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 dayjs.extend(dayjs_plugin_relativeTime);
 var STORAGE_KEY = 'kosync-theme';
 function applyStoredTheme() {
-  var t = localStorage.getItem(STORAGE_KEY);
-  if (t) document.documentElement.setAttribute('data-theme', t);
+  var t = localStorage.getItem(STORAGE_KEY) || 'auto';
+  document.documentElement.setAttribute('data-theme', t);
+  var sel = document.getElementById('themeSelect');
+  if (sel) sel.value = t;
 }
-function toggleTheme() {
-  var cur = document.documentElement.getAttribute('data-theme') || 'auto';
-  var next = cur === 'light' ? 'dark' : cur === 'dark' ? 'auto' : 'light';
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem(STORAGE_KEY, next);
+function setTheme(val) {
+  document.documentElement.setAttribute('data-theme', val);
+  localStorage.setItem(STORAGE_KEY, val);
 }
 applyStoredTheme();
 
