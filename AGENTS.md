@@ -1,6 +1,6 @@
 # AGENTS.md
 
-KOReader Progress Sync backend on Cloudflare Workers + D1. Single-file Worker; no monorepo, tests, lint, CI, or lockfile.
+KOReader Progress Sync backend on Cloudflare Workers + D1. Single-file Worker; no monorepo, tests, lint, or CI.
 
 **Stack:** plain JS (not TS), Wrangler 4, D1. Scripts use `bunx` (Bun), not npm/npx.
 

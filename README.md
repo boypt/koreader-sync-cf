@@ -17,6 +17,7 @@ A Cloudflare Workers-based backend for KOReader Progress Sync, with metadata sup
 
 - `src/index.js` — Worker entrypoint (all routes, auth, DB, web UI)
 - `wrangler.toml` — Cloudflare Workers configuration
+- `package.json` — dev/deploy scripts
 - `migrations/001_create_tables.sql` — Core schema (users, documents)
 - `migrations/002_add_metadata_columns.sql` — Adds metadata columns to documents
 - `migrations/003_create_sync_log.sql` — Sync history table
@@ -36,7 +37,7 @@ Or deploy manually:
 ## Local Development
 
 ```bash
-bun install                    # or npm i --legacy-peer-deps
+bun install                    # or npm i
 bunx wrangler d1 migrations apply kosync --local
 bun run dev                    # starts at http://localhost:8787
 ```
