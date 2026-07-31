@@ -389,6 +389,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   }
 
   /* —— Empty / loading states —— */
+  .error-msg { color: var(--pico-color-red-500, #d32f2f); text-align: center; margin-bottom: 1rem; display: none; }
   .empty {
     text-align: center;
     color: var(--pico-muted-color);
@@ -740,6 +741,8 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       <option value="light">&#9788; Light</option>
       <option value="dark">&#9790; Dark</option>
     </select>
+    <button type="button" onclick="openPasswordModal()" class="outline secondary">Password</button>
+    <button type="button" onclick="runMaintenance()" class="outline secondary">Maintenance</button>
     <button type="button" onclick="logout()" class="outline secondary">Logout</button>
   </div>
 </header>
@@ -847,7 +850,31 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       </div>
     </div>
   </div>
+
+  <div id="passwordModal" class="modal-overlay" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle">
+      <div class="modal-header">
+        <div>
+          <span class="panel-kicker">Account</span>
+          <h2 id="passwordModalTitle">Change password</h2>
+        </div>
+        <button type="button" class="modal-close" onclick="closePasswordModal()" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="passwordForm" onsubmit="changePassword(event)">
+          <label for="newPassword">New password</label>
+          <input type="password" id="newPassword" name="newPassword" required autocomplete="new-password">
+          <label for="confirmPassword">Confirm password</label>
+          <input type="password" id="confirmPassword" name="confirmPassword" required autocomplete="new-password">
+          <div id="passwordError" class="error-msg" style="display:none;margin-bottom:0.75rem"></div>
+          <div id="passwordSuccess" style="display:none;color:var(--pico-color-green-500, #2e7d32);margin-bottom:0.75rem;text-align:center"></div>
+          <button type="submit">Change password</button>
+        </form>
+      </div>
+    </div>
+  </div>
 </main>
+<script src="//cdn.jsdelivr.net/npm/blueimp-md5@2.19.0/js/md5.min.js"></script>
 <script src="//cdn.jsdelivr.net/npm/simple-datatables@latest/dist/umd/simple-datatables.js"></script>
 <script src="//cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="//cdn.jsdelivr.net/npm/dayjs@1.11.13/dayjs.min.js"></script>
@@ -1007,8 +1034,77 @@ document.getElementById('historyModal').addEventListener('click', function(e) {
   if (e.target === this) closeHistoryModal();
 });
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeHistoryModal();
+  if (e.key === 'Escape') {
+    if (!document.getElementById('passwordModal').hasAttribute('hidden')) {
+      closePasswordModal();
+    } else if (!document.getElementById('historyModal').hasAttribute('hidden')) {
+      closeHistoryModal();
+    }
+  }
 });
+
+/* —— Password modal —— */
+function openPasswordModal() {
+  document.getElementById('passwordError').style.display = 'none';
+  document.getElementById('passwordSuccess').style.display = 'none';
+  document.getElementById('passwordForm').reset();
+  document.getElementById('passwordModal').removeAttribute('hidden');
+}
+function closePasswordModal() {
+  document.getElementById('passwordModal').setAttribute('hidden', '');
+}
+document.getElementById('passwordModal').addEventListener('click', function(e) {
+  if (e.target === this) closePasswordModal();
+});
+async function changePassword(e) {
+  e.preventDefault();
+  var errorEl = document.getElementById('passwordError');
+  var successEl = document.getElementById('passwordSuccess');
+  errorEl.style.display = 'none';
+  successEl.style.display = 'none';
+  var pw = document.getElementById('newPassword').value;
+  var confirm = document.getElementById('confirmPassword').value;
+  if (pw !== confirm) {
+    errorEl.textContent = 'Passwords do not match';
+    errorEl.style.display = 'block';
+    return;
+  }
+  if (pw.length < 1) {
+    errorEl.textContent = 'Password cannot be empty';
+    errorEl.style.display = 'block';
+    return;
+  }
+  var res = await fetch('/web/api/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: md5(pw) })
+  });
+  if (res.status === 401) { window.location.href = '/web'; return; }
+  var data = await res.json();
+  if (data.ok) {
+    successEl.textContent = 'Password changed successfully';
+    successEl.style.display = 'block';
+    setTimeout(closePasswordModal, 1500);
+  } else {
+    errorEl.textContent = data.error || 'Failed to change password';
+    errorEl.style.display = 'block';
+  }
+}
+
+/* —— Maintenance —— */
+async function runMaintenance() {
+  if (!confirm('This will prune sync_log to keep only the first and last sync record per document. Continue?')) return;
+  var res = await fetch('/web/api/maintenance', { method: 'POST' });
+  if (res.status === 401) { window.location.href = '/web'; return; }
+  var data = await res.json();
+  var msg = 'Maintenance complete. ' + (data.deleted || 0) + ' records removed.';
+  if (data.error) msg = 'Error: ' + data.error;
+  alert(msg);
+  if (data.ok) {
+    loadReadingStats();
+    loadCharts();
+  }
+}
 
 function formatDuration(secs) {
   if (!secs || secs < 0) return '—';
@@ -1417,6 +1513,35 @@ export default {
         ORDER BY sync_count DESC
       `).bind(sessionUser).all();
       return JSON_RESPONSE(200, res.results || []);
+    }
+
+    // POST /web/api/change-password
+    if (method === 'POST' && pathname === '/web/api/change-password') {
+      const sessionUser = await getSessionUser(db, request);
+      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+      const body = await parseJson(request);
+      if (!body || !body.password) return JSON_RESPONSE(400, { ok: false, error: 'Password required' });
+      // Web login sends MD5 hash, so store the hash directly
+      await db.prepare('UPDATE users SET password = ? WHERE username = ?').bind(body.password, sessionUser).run();
+      return JSON_RESPONSE(200, { ok: true });
+    }
+
+    // POST /web/api/maintenance
+    if (method === 'POST' && pathname === '/web/api/maintenance') {
+      const sessionUser = await getSessionUser(db, request);
+      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+      try {
+        // Keep only the first (MIN id) and last (MAX id) sync_log per document
+        const result = await db.prepare(`
+          DELETE FROM sync_log
+          WHERE username = ?
+            AND id NOT IN (SELECT MIN(id) FROM sync_log WHERE username = ? GROUP BY document)
+            AND id NOT IN (SELECT MAX(id) FROM sync_log WHERE username = ? GROUP BY document)
+        `).bind(sessionUser, sessionUser, sessionUser).run();
+        return JSON_RESPONSE(200, { ok: true, deleted: result.meta.changes || 0 });
+      } catch (e) {
+        return JSON_RESPONSE(500, { error: e.message });
+      }
     }
 
     // GET / -> redirect to /web
