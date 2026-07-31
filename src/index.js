@@ -751,7 +751,6 @@ async function loadHistory(docEncoded, rowEl) {
   html += '<th>Device</th>';
   html += '<th>Device ID</th>';
   html += '<th>Timestamp</th>';
-  html += '<th>Created At</th>';
   html += '</tr></thead><tbody>';
   data.forEach(function(entry) {
     html += '<tr>';
@@ -759,7 +758,6 @@ async function loadHistory(docEncoded, rowEl) {
     html += '<td>' + escapeHtml(entry.device || '') + '</td>';
     html += '<td>' + (entry.device_id ? '<span title="' + escapeHtml(entry.device_id) + '">' + escapeHtml(entry.device_id.substring(0, 4)) + '…</span>' : '') + '</td>';
     html += '<td data-order="' + (entry.timestamp || 0) + '">' + relativeTime(entry.timestamp) + '</td>';
-    html += '<td data-order="' + (entry.created_at || 0) + '">' + relativeTime(entry.created_at) + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
