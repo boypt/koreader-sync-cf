@@ -363,11 +363,29 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     margin-right: 0.5rem;
   }
   table.table { margin-bottom: 0; }
-  .doc-row { cursor: pointer; transition: background 0.15s ease; }
-  .doc-row:hover { background: color-mix(in srgb, var(--pico-primary) 6%, transparent); }
+  .datatable-table tbody tr td {
+    transition: background 0.15s ease;
+    border-bottom: 1px solid color-mix(in srgb, var(--pico-muted-border-color) 55%, transparent);
+  }
+  .datatable-table tbody tr:last-child td { border-bottom: none; }
+  .datatable-table tbody tr:nth-child(even) td {
+    background: color-mix(in srgb, var(--pico-muted-border-color) 12%, transparent);
+  }
+  .datatable-table tbody tr:hover td {
+    background: color-mix(in srgb, var(--pico-primary) 8%, transparent);
+  }
+  .doc-row { cursor: pointer; }
+  .doc-row:hover td {
+    background: color-mix(in srgb, var(--pico-primary) 10%, transparent);
+  }
   .doc-row.active {
-    background: color-mix(in srgb, var(--pico-primary) 12%, transparent);
     box-shadow: inset 3px 0 0 var(--pico-primary);
+  }
+  .doc-row.active td {
+    background: color-mix(in srgb, var(--pico-primary) 12%, transparent);
+  }
+  .doc-row.active:hover td {
+    background: color-mix(in srgb, var(--pico-primary) 16%, transparent);
   }
 
   /* —— Empty / loading states —— */
@@ -1000,7 +1018,7 @@ async function loadReadingStats() {
   html += '<th>First Sync</th>';
   html += '<th>Last Sync</th>';
   html += '<th>Duration</th>';
-  html += '<th>Latest Progress</th>';
+  html += '<th>Max Progress</th>';
   html += '<th>Events</th>';
   html += '</tr></thead><tbody>';
   data.forEach(function(item) {
