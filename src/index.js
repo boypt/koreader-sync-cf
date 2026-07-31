@@ -1093,7 +1093,7 @@ async function changePassword(e) {
 
 /* —— Maintenance —— */
 async function runMaintenance() {
-  if (!confirm('This will:\n\n- Prune sync_log to keep only the first & last record per document\n- Remove documents with last sync older than 3 months\n\nContinue?')) return;
+  if (!confirm('This will prune sync_log (keep first & last per document) and remove documents older than 3 months. Continue?')) return;
   var res = await fetch('/web/api/maintenance', { method: 'POST' });
   if (res.status === 401) { window.location.href = '/web'; return; }
   var data = await res.json();
