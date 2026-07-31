@@ -1168,11 +1168,7 @@ export default {
           (MAX(timestamp) - MIN(timestamp)) AS duration_seconds,
           COUNT(*) AS event_count,
           MAX(authors) AS authors,
-          (SELECT percentage FROM sync_log s2
-             WHERE s2.username = sync_log.username
-               AND s2.document = sync_log.document
-               AND COALESCE(NULLIF(s2.title, ''), NULLIF(s2.filename, ''), s2.document) = COALESCE(NULLIF(sync_log.title, ''), NULLIF(sync_log.filename, ''), sync_log.document)
-             ORDER BY s2.timestamp DESC LIMIT 1) AS latest_percentage
+          MAX(percentage) AS latest_percentage
         FROM sync_log
         WHERE username = ?
         GROUP BY COALESCE(NULLIF(title, ''), NULLIF(filename, ''), document)
