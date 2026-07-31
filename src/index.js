@@ -1098,6 +1098,15 @@ export default {
           device_id,
           timestamp: row.timestamp
         };
+
+        // Log the GET progress event for reading stats (timestamp + book info only)
+        const now = Math.floor(Date.now() / 1000);
+        await db.prepare(`INSERT INTO sync_log
+          (username, document, timestamp, filename, title, authors)
+          VALUES (?, ?, ?, ?, ?, ?)`)
+          .bind(authUser, row.document, now, row.filename, row.title, row.authors)
+          .run();
+
         return JSON_RESPONSE(200, response);
       }
 
