@@ -434,47 +434,238 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     box-sizing: border-box;
   }
 
-  /* —— DataTables controls sizing —— */
+  /* —— DataTables controls —— */
+  .datatable-wrapper {
+    font-size: 0.9rem;
+  }
+  .datatable-top,
+  .datatable-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem 1rem;
+    padding: 0.15rem 0;
+  }
+  .datatable-top {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--pico-muted-border-color) 70%, transparent);
+  }
+  .datatable-bottom {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid color-mix(in srgb, var(--pico-muted-border-color) 70%, transparent);
+  }
+  .datatable-top > nav,
+  .datatable-top > div,
+  .datatable-bottom > nav,
+  .datatable-bottom > div {
+    float: none !important;
+    width: auto;
+    margin: 0;
+  }
+
+  /* Search + per-page inputs */
   .datatable-top input,
-  .datatable-top select {
+  .datatable-top select,
+  .datatable-bottom select {
     max-width: 220px;
     font-size: 0.85rem;
-    padding: 0.35rem 0.65rem;
+    padding: 0.4rem 0.7rem;
     height: auto;
+    margin: 0;
     margin-bottom: 0;
     border-radius: var(--pico-border-radius);
+    border: 1px solid var(--pico-muted-border-color);
+    background: color-mix(in srgb, var(--pico-background-color) 55%, var(--pico-card-background-color, var(--pico-background-color)));
+    box-shadow: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .datatable-top input:focus,
+  .datatable-top select:focus,
+  .datatable-bottom select:focus {
+    border-color: var(--pico-primary);
+    box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--pico-primary) 22%, transparent);
+  }
+  .datatable-search {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .datatable-search label {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--pico-muted-color);
+  }
+  .datatable-input {
+    min-width: 10rem;
   }
 
-  .datatable-selector {
+  /* Per-page selector — intentional chip, not invisible */
+  .datatable-dropdown {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .datatable-dropdown label {
+    margin: 0;
     font-size: 0.78rem;
+    font-weight: 500;
     color: var(--pico-muted-color);
-    background: transparent;
-    border-color: transparent;
-    padding: 0.25rem 2.5em 0.25rem 0.4rem !important;
+    white-space: nowrap;
+  }
+  .datatable-selector {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--pico-color);
+    background: color-mix(in srgb, var(--pico-background-color) 55%, var(--pico-card-background-color, var(--pico-background-color)));
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 0.35rem 2.1em 0.35rem 0.65rem !important;
     max-width: none;
     width: auto;
+    min-width: 4.25rem;
     cursor: pointer;
+    box-shadow: none;
   }
   .datatable-selector:hover {
-    border-color: var(--pico-muted-border-color);
+    border-color: color-mix(in srgb, var(--pico-primary) 45%, var(--pico-muted-border-color));
+  }
+  .datatable-selector:focus {
+    border-color: var(--pico-primary);
+    box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--pico-primary) 22%, transparent);
   }
 
+  /* Info text */
   .datatable-info {
     font-size: 0.78rem;
     color: var(--pico-muted-color);
+    letter-spacing: 0.01em;
+    line-height: 1.4;
+  }
+
+  /* Pagination — Pico-like outline pills */
+  .datatable-pagination {
+    margin: 0;
+  }
+  .datatable-pagination ul {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .datatable-pagination li {
+    margin: 0;
+    padding: 0;
+  }
+  .datatable-pagination a,
+  .datatable-pagination button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.55rem;
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--pico-color);
+    text-decoration: none;
+    background: transparent;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    cursor: pointer;
+    box-shadow: none;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .datatable-pagination a:hover,
+  .datatable-pagination button:hover {
+    color: var(--pico-primary);
+    border-color: color-mix(in srgb, var(--pico-primary) 50%, var(--pico-muted-border-color));
+    background: color-mix(in srgb, var(--pico-primary) 8%, transparent);
+  }
+  .datatable-pagination .datatable-active a,
+  .datatable-pagination .datatable-active button,
+  .datatable-pagination a.datatable-active,
+  .datatable-pagination button.datatable-active {
+    color: var(--pico-primary-inverse, #fff);
+    background: var(--pico-primary);
+    border-color: var(--pico-primary);
+  }
+  .datatable-pagination .datatable-active a:hover,
+  .datatable-pagination .datatable-active button:hover,
+  .datatable-pagination a.datatable-active:hover,
+  .datatable-pagination button.datatable-active:hover {
+    color: var(--pico-primary-inverse, #fff);
+    background: var(--pico-primary-hover, var(--pico-primary));
+    border-color: var(--pico-primary-hover, var(--pico-primary));
+  }
+  .datatable-pagination .datatable-disabled a,
+  .datatable-pagination .datatable-disabled button,
+  .datatable-pagination a.datatable-disabled,
+  .datatable-pagination button.datatable-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* Column sorters */
+  .datatable-sorter {
+    color: inherit;
+    text-decoration: none;
+  }
+  .datatable-sorter::before,
+  .datatable-sorter::after {
+    opacity: 0.35;
+  }
+  th.datatable-ascending .datatable-sorter::after,
+  th.datatable-descending .datatable-sorter::before {
+    opacity: 1;
+    color: var(--pico-primary);
   }
 
   /* —— DataTables mobile —— */
   @media (max-width: 576px) {
+    .datatable-top,
+    .datatable-bottom {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.55rem;
+    }
     .datatable-top > nav,
-    .datatable-top > div {
+    .datatable-top > div,
+    .datatable-bottom > nav,
+    .datatable-bottom > div {
       float: none !important;
       width: 100%;
-      margin: 0 0 0.5rem;
+      margin: 0;
     }
-    .datatable-top > nav:last-child,
-    .datatable-top > div:last-child {
-      margin-bottom: 0;
+    .datatable-search,
+    .datatable-dropdown {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .datatable-top input,
+    .datatable-top select,
+    .datatable-bottom select,
+    .datatable-input,
+    .datatable-selector {
+      max-width: none;
+      width: 100%;
+      flex: 1;
+    }
+    .datatable-pagination ul {
+      justify-content: center;
+    }
+    .datatable-info {
+      text-align: center;
+      width: 100%;
     }
   }
 
