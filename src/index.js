@@ -749,14 +749,16 @@ async function loadHistory(docEncoded, rowEl) {
   html += '<thead><tr>';
   html += '<th>Progress</th>';
   html += '<th>Device</th>';
-  html += '<th>Device ID</th>';
   html += '<th>Timestamp</th>';
   html += '</tr></thead><tbody>';
   data.forEach(function(entry) {
     html += '<tr>';
     html += '<td>' + renderProgressBar(entry.percentage) + '</td>';
-    html += '<td>' + escapeHtml(entry.device || '') + '</td>';
-    html += '<td>' + (entry.device_id ? '<span title="' + escapeHtml(entry.device_id) + '">' + escapeHtml(entry.device_id.substring(0, 4)) + '…</span>' : '') + '</td>';
+    var deviceLabel = escapeHtml(entry.device || '');
+    if (entry.device_id) {
+      deviceLabel += ' <span title="' + escapeHtml(entry.device_id) + '">(' + escapeHtml(entry.device_id.substring(0, 4)) + '…)</span>';
+    }
+    html += '<td>' + deviceLabel + '</td>';
     html += '<td data-order="' + (entry.timestamp || 0) + '">' + relativeTime(entry.timestamp) + '</td>';
     html += '</tr>';
   });
