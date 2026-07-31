@@ -534,6 +534,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
           <h2 id="docs-heading">Documents</h2>
           <p class="panel-hint">Click a row to view sync history</p>
         </div>
+        <button type="button" onclick="loadDocuments()" class="outline secondary" style="padding:0.35rem 0.6rem;font-size:0.85rem;height:auto;margin-top:0.2rem" title="Refresh documents">&#8635;</button>
       </div>
       <div class="panel-body">
         <div class="table-wrapper">
@@ -555,6 +556,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
         <h2 id="stats-heading">Reading duration</h2>
         <p class="panel-hint">Time span from first to last sync, per document</p>
       </div>
+      <button type="button" onclick="loadReadingStats()" class="outline secondary" style="padding:0.35rem 0.6rem;font-size:0.85rem;height:auto;margin-top:0.2rem" title="Refresh reading stats">&#8635;</button>
     </div>
     <div class="panel-body">
       <div class="table-wrapper">
@@ -1099,12 +1101,12 @@ export default {
           timestamp: row.timestamp
         };
 
-        // Log the GET progress event for reading stats (timestamp + book info only)
+        // Log the GET progress event for reading stats (timestamp + book info + progress)
         const now = Math.floor(Date.now() / 1000);
         await db.prepare(`INSERT INTO sync_log
-          (username, document, timestamp, filename, title, authors)
-          VALUES (?, ?, ?, ?, ?, ?)`)
-          .bind(authUser, row.document, now, row.filename, row.title, row.authors)
+          (username, document, progress, percentage, timestamp, filename, title, authors)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+          .bind(authUser, row.document, row.progress, row.percentage, now, row.filename, row.title, row.authors)
           .run();
 
         return JSON_RESPONSE(200, response);
