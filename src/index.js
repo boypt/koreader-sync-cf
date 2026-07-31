@@ -1098,13 +1098,6 @@ export default {
           device_id,
           timestamp: row.timestamp
         };
-        if (row.filename || row.title || row.authors) {
-          response.metadata = {
-            filename: row.filename,
-            title: row.title,
-            authors: row.authors
-          };
-        }
         return JSON_RESPONSE(200, response);
       }
 
