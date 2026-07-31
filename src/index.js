@@ -1093,14 +1093,18 @@ async function changePassword(e) {
 
 /* —— Maintenance —— */
 async function runMaintenance() {
-  if (!confirm('This will prune sync_log to keep only the first and last sync record per document. Continue?')) return;
+  if (!confirm('This will:\n\n- Prune sync_log to keep only the first & last record per document\n- Remove documents with last sync older than 3 months\n\nContinue?')) return;
   var res = await fetch('/web/api/maintenance', { method: 'POST' });
   if (res.status === 401) { window.location.href = '/web'; return; }
   var data = await res.json();
-  var msg = 'Maintenance complete. ' + (data.deleted || 0) + ' records removed.';
+  var msg = 'Maintenance complete.\n';
+  if (data.log_deleted) msg += '\n- ' + data.log_deleted + ' sync_log rows pruned';
+  if (data.docs_deleted) msg += '\n- ' + data.docs_deleted + ' stale documents removed';
+  if (!data.log_deleted && !data.docs_deleted) msg += '\nNothing to clean up.';
   if (data.error) msg = 'Error: ' + data.error;
   alert(msg);
   if (data.ok) {
+    loadDocuments();
     loadReadingStats();
     loadCharts();
   }
@@ -1531,14 +1535,30 @@ export default {
       const sessionUser = await getSessionUser(db, request);
       if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
       try {
-        // Keep only the first (MIN id) and last (MAX id) sync_log per document
-        const result = await db.prepare(`
+        const threeMonthsAgo = Math.floor(Date.now() / 1000) - 90 * 86400;
+        let logDeleted = 0;
+        let docDeleted = 0;
+
+        // Prune sync_log: keep only first & last per document
+        const logResult = await db.prepare(`
           DELETE FROM sync_log
           WHERE username = ?
             AND id NOT IN (SELECT MIN(id) FROM sync_log WHERE username = ? GROUP BY document)
             AND id NOT IN (SELECT MAX(id) FROM sync_log WHERE username = ? GROUP BY document)
         `).bind(sessionUser, sessionUser, sessionUser).run();
-        return JSON_RESPONSE(200, { ok: true, deleted: result.meta.changes || 0 });
+        logDeleted = logResult.meta.changes || 0;
+
+        // Remove documents with last sync > 3 months ago
+        const docResult = await db.prepare(`
+          DELETE FROM documents WHERE username = ? AND timestamp < ?
+        `).bind(sessionUser, threeMonthsAgo).run();
+        docDeleted = docResult.meta.changes || 0;
+
+        return JSON_RESPONSE(200, {
+          ok: true,
+          log_deleted: logDeleted,
+          docs_deleted: docDeleted
+        });
       } catch (e) {
         return JSON_RESPONSE(500, { error: e.message });
       }
