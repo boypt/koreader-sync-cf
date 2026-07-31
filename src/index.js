@@ -208,6 +208,14 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     padding: 0.4rem 0.75rem;
     font-size: 0.85rem;
   }
+  .dash-actions .btn-icon {
+    padding: 0.35rem 0.5rem;
+    font-size: 1rem;
+    line-height: 1;
+    width: 2.2rem;
+    height: 2.2rem;
+    text-align: center;
+  }
 
   /* —— Page shell —— */
   .dash-main {
@@ -715,9 +723,11 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     .dash-main { padding: 1rem 0.85rem 2rem; }
     .panel-header { padding: 0.85rem 0.9rem; }
     .panel-body { padding: 0.65rem 0.75rem 0.85rem; }
-    .dash-actions button:not(.btn-icon) {
-      padding: 0.4rem 0.55rem;
-      font-size: 0.8rem;
+    .dash-actions .btn-icon {
+      width: 2rem;
+      height: 2rem;
+      padding: 0.3rem 0.4rem;
+      font-size: 0.95rem;
     }
     .modal-panel {
       width: 95vw;
@@ -741,9 +751,9 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       <option value="light">&#9788; Light</option>
       <option value="dark">&#9790; Dark</option>
     </select>
-    <button type="button" onclick="openPasswordModal()" class="outline secondary">Password</button>
-    <button type="button" onclick="runMaintenance()" class="outline secondary">Maintenance</button>
-    <button type="button" onclick="logout()" class="outline secondary">Logout</button>
+    <button type="button" onclick="openPasswordModal()" class="outline secondary btn-icon" title="Change password">&#128273;</button>
+    <button type="button" onclick="runMaintenance()" class="outline secondary btn-icon" title="Maintenance">&#128295;</button>
+    <button type="button" onclick="logout()" class="outline secondary btn-icon" title="Logout">&#128682;</button>
   </div>
 </header>
 
