@@ -581,8 +581,13 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     margin: 0;
     padding: 0;
   }
+  /* Reset Pico button tokens: on <button>, --pico-color is primary-inverse
+     (meant for solid primary fills). Transparent bg + inverse text = invisible. */
   .datatable-pagination a,
   .datatable-pagination button {
+    --pico-background-color: color-mix(in srgb, var(--pico-muted-border-color) 22%, transparent);
+    --pico-border-color: var(--pico-muted-border-color);
+    --pico-color: inherit;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -593,35 +598,45 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     font-size: 0.8rem;
     font-weight: 500;
     line-height: 1;
-    color: var(--pico-color);
+    color: inherit;
     text-decoration: none;
-    background: transparent;
-    border: 1px solid var(--pico-muted-border-color);
+    background-color: var(--pico-background-color);
+    border: 1px solid var(--pico-border-color);
     border-radius: var(--pico-border-radius);
     cursor: pointer;
     box-shadow: none;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    opacity: 1;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
   .datatable-pagination a:hover,
   .datatable-pagination button:hover {
+    --pico-background-color: color-mix(in srgb, var(--pico-primary) 12%, transparent);
+    --pico-border-color: color-mix(in srgb, var(--pico-primary) 50%, var(--pico-muted-border-color));
+    --pico-color: var(--pico-primary);
     color: var(--pico-primary);
-    border-color: color-mix(in srgb, var(--pico-primary) 50%, var(--pico-muted-border-color));
-    background: color-mix(in srgb, var(--pico-primary) 8%, transparent);
+    background-color: var(--pico-background-color);
+    border-color: var(--pico-border-color);
   }
   .datatable-pagination .datatable-active a,
   .datatable-pagination .datatable-active button,
   .datatable-pagination a.datatable-active,
   .datatable-pagination button.datatable-active {
+    --pico-background-color: var(--pico-primary);
+    --pico-border-color: var(--pico-primary);
+    --pico-color: var(--pico-primary-inverse, #fff);
     color: var(--pico-primary-inverse, #fff);
-    background: var(--pico-primary);
+    background-color: var(--pico-primary);
     border-color: var(--pico-primary);
   }
   .datatable-pagination .datatable-active a:hover,
   .datatable-pagination .datatable-active button:hover,
   .datatable-pagination a.datatable-active:hover,
   .datatable-pagination button.datatable-active:hover {
+    --pico-background-color: var(--pico-primary-hover, var(--pico-primary));
+    --pico-border-color: var(--pico-primary-hover, var(--pico-primary));
+    --pico-color: var(--pico-primary-inverse, #fff);
     color: var(--pico-primary-inverse, #fff);
-    background: var(--pico-primary-hover, var(--pico-primary));
+    background-color: var(--pico-primary-hover, var(--pico-primary));
     border-color: var(--pico-primary-hover, var(--pico-primary));
   }
   .datatable-pagination .datatable-disabled a,
