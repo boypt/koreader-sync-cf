@@ -1097,10 +1097,10 @@ async function runMaintenance() {
   var res = await fetch('/web/api/maintenance', { method: 'POST' });
   if (res.status === 401) { window.location.href = '/web'; return; }
   var data = await res.json();
-  var msg = 'Maintenance complete.\n';
-  if (data.log_deleted) msg += '\n- ' + data.log_deleted + ' sync_log rows pruned';
-  if (data.docs_deleted) msg += '\n- ' + data.docs_deleted + ' stale documents removed';
-  if (!data.log_deleted && !data.docs_deleted) msg += '\nNothing to clean up.';
+  var msg = 'Maintenance complete.\\n';
+  if (data.log_deleted) msg += '\\n- ' + data.log_deleted + ' sync_log rows pruned';
+  if (data.docs_deleted) msg += '\\n- ' + data.docs_deleted + ' stale documents removed';
+  if (!data.log_deleted && !data.docs_deleted) msg += '\\nNothing to clean up.';
   if (data.error) msg = 'Error: ' + data.error;
   alert(msg);
   if (data.ok) {
