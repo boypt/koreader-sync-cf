@@ -1342,6 +1342,7 @@ export default {
 
     const isSecure = url.protocol === 'https:';
     const cookieSecure = isSecure ? '; Secure' : '';
+    const expires = new Date(Date.now() + 2592000 * 1000).toUTCString();
 
     // POST /users/create
     if (method === 'POST' && pathname === '/users/create') {
@@ -1607,7 +1608,7 @@ export default {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          'Set-Cookie': `session_token=${token}; HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000${cookieSecure}`
+          'Set-Cookie': `session_token=${token}; HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000; Expires=${expires}${cookieSecure}`
         }
       });
     }
@@ -1623,7 +1624,7 @@ export default {
         status: 302,
         headers: {
           'Location': '/web',
-          'Set-Cookie': `session_token=; HttpOnly; SameSite=Lax; Path=/web; Max-Age=0${cookieSecure}`
+          'Set-Cookie': `session_token=; HttpOnly; SameSite=Lax; Path=/web; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${cookieSecure}`
         }
       });
     }
