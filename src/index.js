@@ -8,6 +8,125 @@ const HTML_RESPONSE = (html) => new Response(html, {
   headers: { 'Content-Type': 'text/html; charset=utf-8' }
 });
 
+// KOReader device model name → retail/friendly name mapping
+// Sourced from /usr/lib/koreader/frontend/device/*/device.lua comments
+const DEVICE_RETAIL_NAMES = {
+  // Kobo
+  'Kobo': 'Kobo',
+  'Kobo_trilogy_A': 'Kobo Touch A',
+  'Kobo_trilogy_B': 'Kobo Touch B',
+  'Kobo_trilogy_C': 'Kobo Touch C',
+  'Kobo_pixie': 'Kobo Mini',
+  'Kobo_daylight': 'Kobo Aura One',
+  'Kobo_dahlia': 'Kobo Aura H2O',
+  'Kobo_dragon': 'Kobo Aura HD',
+  'Kobo_kraken': 'Kobo Glo',
+  'Kobo_phoenix': 'Kobo Aura',
+  'Kobo_snow': 'Kobo Aura H2O2',
+  'Kobo_snow_r2': 'Kobo Aura H2O2 rev2',
+  'Kobo_star': 'Kobo Aura SE',
+  'Kobo_star_r2': 'Kobo Aura SE rev2',
+  'Kobo_alyssum': 'Kobo Glo HD',
+  'Kobo_pika': 'Kobo Touch 2.0',
+  'Kobo_nova': 'Kobo Clara HD',
+  'Kobo_frost': 'Kobo Forma',
+  'Kobo_storm': 'Kobo Libra',
+  'Kobo_luna': 'Kobo Nia',
+  'Kobo_europa': 'Kobo Elipsa',
+  'Kobo_cadmus': 'Kobo Sage',
+  'Kobo_io': 'Kobo Libra 2',
+  'Kobo_goldfinch': 'Kobo Clara 2E',
+  'Kobo_condor': 'Kobo Elipsa 2E',
+  'Kobo_monza': 'Kobo Libra Colour',
+  'Kobo_spaBW': 'Kobo Clara BW',
+  'Kobo_spaColour': 'Kobo Clara Colour',
+  // PocketBook
+  'PocketBook': 'PocketBook',
+  'PB515': 'PocketBook Mini',
+  'PB606': 'PocketBook Basic 4',
+  'PB611': 'PocketBook Basic',
+  'PB613B': 'PocketBook Basic 613',
+  'PB614W': 'PocketBook Basic 2/3',
+  'PBBLux': 'PocketBook Basic Lux / 615 Plus',
+  'PBBLux2': 'PocketBook Basic Lux 2',
+  'PBBLux3': 'PocketBook Basic Lux 3',
+  'PBBLux4': 'PocketBook Basic Lux 4',
+  'PBVerseLite': 'PocketBook Verse Lite',
+  'PBTouch': 'PocketBook Touch',
+  'PBTouchLux': 'PocketBook Touch Lux',
+  'PBBasicTouch': 'PocketBook Basic Touch',
+  'PBBasicTouch2': 'PocketBook Basic Touch 2',
+  'PBLux3': 'PocketBook Touch Lux 2/3',
+  'PBLux4': 'PocketBook Touch Lux 4',
+  'PBTouchLux5': 'PocketBook Touch Lux 5',
+  'PB629': 'PocketBook Verse',
+  'PBSense': 'PocketBook Sense / Sense 2',
+  'PBTouchHD': 'PocketBook Touch HD / Touch HD 2',
+  'PBTouchHDPlus': 'PocketBook Touch HD Plus / Touch HD 3',
+  'PBColor': 'PocketBook Color',
+  'PB634': 'PocketBook Verse Pro',
+  'PBVerseProColor': 'PocketBook Verse Pro Color',
+  'PBAqua': 'PocketBook Aqua',
+  'PBAqua2': 'PocketBook Aqua 2',
+  'PBUltra': 'PocketBook Ultra',
+  'PB700': 'PocketBook Era',
+  'PBEraColor': 'PocketBook Era Color',
+  'PBInkPad3': 'PocketBook InkPad 3',
+  'PBInkPad3Pro': 'PocketBook InkPad 3 Pro',
+  'PBInkPadColor': 'PocketBook InkPad Color',
+  'PBInkPadColor2': 'PocketBook InkPad Color 2',
+  'PBInkPadColor3': 'PocketBook InkPad Color 3',
+  'PBInkPad4': 'PocketBook InkPad 4',
+  'PBColorLux': 'PocketBook Color Lux',
+  'PBInkPad': 'PocketBook InkPad / InkPad 2',
+  'PB970': 'PocketBook InkPad Lite',
+  'PB1040': 'PocketBook InkPad X',
+  // Kindle
+  'Kindle': 'Kindle',
+  'Kindle2': 'Kindle 2/DX',
+  'KindleDXG': 'Kindle DX Graphite',
+  'Kindle3': 'Kindle Keyboard',
+  'Kindle4': 'Kindle 4',
+  'KindleTouch': 'Kindle Touch',
+  'KindlePaperWhite': 'Kindle Paperwhite 1',
+  'KindlePaperWhite2': 'Kindle Paperwhite 2',
+  'KindleBasic': 'Kindle Basic',
+  'KindleVoyage': 'Kindle Voyage',
+  'KindlePaperWhite3': 'Kindle Paperwhite 3',
+  'KindleOasis': 'Kindle Oasis 1',
+  'KindleOasis2': 'Kindle Oasis 2',
+  'KindleOasis3': 'Kindle Oasis 3',
+  'KindleBasic2': 'Kindle Basic 2',
+  'KindlePaperWhite4': 'Kindle Paperwhite 4',
+  'KindleBasic3': 'Kindle Basic 3 (KT4)',
+  'KindlePaperWhite5': 'Kindle Paperwhite 5',
+  'KindlePaperWhite5SE': 'Kindle Paperwhite 5 SE',
+  'KindlePaperWhite6': 'Kindle Paperwhite 6',
+  'KindleBasic4': 'Kindle Basic 4 (KT5)',
+  'KindleBasic5': 'Kindle Basic 5 (KT6)',
+  'KindleScribe': 'Kindle Scribe',
+  'KindleColorSoft': 'Kindle Colorsoft',
+  // Cervantes
+  'Cervantes': 'Cervantes',
+  'CervantesTouch': 'Cervantes Touch',
+  'CervantesTouchLight': 'Cervantes TouchLight / Fnac Touch Plus',
+  'Cervantes2013': 'Cervantes 2013 / Fnac Touch Light',
+  'Cervantes3': 'Cervantes 3 / Fnac Touch Light 2',
+  'Cervantes4': 'Cervantes 4',
+  // reMarkable
+  'Remarkable': 'reMarkable',
+  'Remarkable1': 'reMarkable 1',
+  'Remarkable2': 'reMarkable 2',
+  'RemarkablePaperPro': 'reMarkable Paper Pro',
+  'RemarkablePaperProMove': 'reMarkable Paper Pro Move',
+  // Sony
+  'Sony PRSTUX': 'Sony PRS-Tx',
+};
+
+function deviceRetailName(model) {
+  return DEVICE_RETAIL_NAMES[model] || model;
+}
+
 function getEnvBool(env, key, fallback = false) {
   const v = env[key];
   if (v === undefined) return fallback;
@@ -966,7 +1085,7 @@ function renderDocuments() {
     html += '<td>' + escapeHtml(title) + '</td>';
     html += '<td>' + escapeHtml(authors) + '</td>';
     html += '<td>' + renderProgressBar(doc.percentage) + '</td>';
-    html += '<td>' + escapeHtml(doc.device || '') + '</td>';
+    html += '<td>' + escapeHtml(deviceRetailName(doc.device) || '') + '</td>';
     html += '<td data-order="' + (doc.timestamp || 0) + '">' + relativeTime(doc.timestamp) + '</td>';
     html += '</tr>';
   });
@@ -1017,7 +1136,7 @@ async function loadHistory(docEncoded, rowEl) {
   data.forEach(function(entry) {
     html += '<tr>';
     html += '<td>' + renderProgressBar(entry.percentage) + '</td>';
-    var deviceLabel = escapeHtml(entry.device || '');
+    var deviceLabel = escapeHtml(deviceRetailName(entry.device) || '');
     if (entry.device_id) {
       deviceLabel += ' <span title="' + escapeHtml(entry.device_id) + '">(' + escapeHtml(entry.device_id.substring(0, 4)) + '…)</span>';
     }
@@ -1195,7 +1314,7 @@ async function loadCharts() {
   } else {
     deviceHost.innerHTML = '<div class="chart-canvas-wrap"><canvas id="deviceChart"></canvas></div>';
     var deviceLabels = deviceData.map(function(d) {
-      var name = d.device || 'Unknown';
+      var name = deviceRetailName(d.device) || 'Unknown';
       var id = d.device_id || '';
       if (id && id.length > 10) id = id.substring(0, 8) + '…';
       return id ? (name + ' (' + id + ')') : name;
