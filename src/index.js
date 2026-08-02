@@ -1647,7 +1647,7 @@ export default {
           COUNT(*) AS sync_count,
           (MAX(timestamp) - MIN(timestamp)) AS total_duration_seconds
         FROM sync_log
-        WHERE username = ?
+        WHERE username = ? AND device_id IS NOT NULL AND device_id != ''
         GROUP BY device, device_id
         ORDER BY sync_count DESC
       `).bind(sessionUser).all();
