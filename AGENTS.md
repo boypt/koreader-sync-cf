@@ -34,12 +34,12 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
 ## Architecture (non-obvious)
 
 - **Binding:** `env.KOSYNC_DB` → D1 `kosync`, `migrations_dir = "migrations"`.
-- **Auth:** headers `x-auth-user` + `x-auth-key` (KOReader). Compared to `users.password` as stored — clients typically send a hash; server does not hash.
+- **Auth:** headers `x-auth-user` + `x-auth-key` (KOReader). Compared to `users.password` as stored — clients send an **MD5 hash** of the password; server compares directly (no server-side hashing). Web login page also hashes client-side with MD5 before sending.
 - **Env flags** (Workers vars; parsed via `getEnvBool` → only lowercase `"true"` is true):
   - `OPEN_REGISTRATIONS` — default **true**; `false` → 403 on `POST /users/create`
   - `RECEIVE_RANDOM_DEVICE_ID` — default **false**; when true, GET progress returns a random `device_id` (forces client resync)
 - **Paths:** trailing slashes stripped before match.
-- **Schema:** `users(username PK, password)`; `documents` PK `(username, document)`, FK to users.
+- **Schema:** `users(username PK, password)` — `password` stores MD5 hashes, not plaintext; `documents` PK `(username, document)`, FK to users.
 
 ### Web UI (inline HTML in `src/index.js`)
 
@@ -90,7 +90,7 @@ Session cookies: `HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000`; `Secure` 
 
 ## Gotchas
 
-- Do **not** “fix” plaintext password storage, 500-on-bad-PUT, or username-only empty progress without checking KOReader client expectations — response shapes/status codes are protocol surface.
+- Do **not** “fix” MD5 password storage, 500-on-bad-PUT, or username-only empty progress without checking KOReader client expectations — response shapes/status codes are protocol surface. Passwords are stored as MD5 hashes (clients send hashes; server compares directly) — this is intentional for KOReader protocol compatibility.
 - Do **not** rename D1 binding `KOSYNC_DB` or table/column names without a migration + client impact check.
 - `wrangler.toml` has no `database_id` — local/remote D1 must be created and id filled (or deploy button flow) before remote works.
 - `@cloudflare/workers-types` is present but code is **`.js`** with no `tsconfig` — don’t assume TypeScript build.
