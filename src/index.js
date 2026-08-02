@@ -1139,6 +1139,9 @@ async function loadHistory(docEncoded, rowEl) {
     if (entry.device_id) {
       deviceLabel += ' <span title="' + escapeHtml(entry.device_id) + '">(' + escapeHtml(entry.device_id.substring(0, 4)) + '…)</span>';
     }
+    if (!deviceLabel) {
+      deviceLabel = '<span style="color:var(--pico-muted-color)">NONE(Pull Synced)</span>';
+    }
     html += '<td>' + deviceLabel + '</td>';
     html += '<td data-order="' + (entry.timestamp || 0) + '">' + relativeTime(entry.timestamp) + '</td>';
     html += '</tr>';
