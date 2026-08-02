@@ -1313,10 +1313,7 @@ async function loadCharts() {
   } else {
     deviceHost.innerHTML = '<div class="chart-canvas-wrap"><canvas id="deviceChart"></canvas></div>';
     var deviceLabels = deviceData.map(function(d) {
-      var name = deviceRetailName(d.device) || 'Unknown';
-      var id = d.device_id || '';
-      if (id && id.length > 10) id = id.substring(0, 8) + '…';
-      return id ? (name + ' (' + id + ')') : name;
+      return deviceRetailName(d.device) || 'Unknown';
     });
     var deviceCounts = deviceData.map(function(d) { return d.sync_count || 0; });
     new Chart(document.getElementById('deviceChart'), {
@@ -1339,7 +1336,16 @@ async function loadCharts() {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: function(ctx) { return (ctx.parsed.y || 0) + ' syncs'; }
+              title: function(ctx) {
+                var d = deviceData[ctx[0].dataIndex];
+                var retail = deviceRetailName(d.device) || 'Unknown';
+                return retail + ' (' + d.device + ')';
+              },
+              label: function(ctx) { return (ctx.parsed.y || 0) + ' syncs'; },
+              afterLabel: function(ctx) {
+                var id = deviceData[ctx.dataIndex].device_id;
+                return id ? 'ID: ' + id : '';
+              }
             }
           }
         },

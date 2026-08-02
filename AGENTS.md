@@ -49,12 +49,13 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
   - **Simple-DataTables** - sortable/searchable/paginated tables for Documents, History, and Reading Duration
   - **Day.js** + relativeTime plugin - `dayjs(ts*1000).fromNow()` for all time columns; exact time shown on hover via `<span title="...">`; `formatTime()` uses `dayjs().format('YYYY-MM-DD HH:mm:ss')` as the tooltip text
   - **Chart.js v4** - used for Statistics charts: device activity (bar chart) and top books by reading duration (horizontal bar chart)
-- **Dashboard layout:** Glass-morphism sticky header (brand mark "K" + title + theme dropdown + logout) → single-column Library panel → modal for document history detail → Reading Duration panel → Statistics charts panel (device + books side-by-side desktop, stacked mobile)
+- **Dashboard layout:** Glass-morphism sticky header (brand mark "K" + title + theme dropdown + logout + password change) → single-column Library panel → modal for document history detail → Reading Duration panel → Statistics charts panel (device + books side-by-side desktop, stacked mobile)
 - **Document history modal:** Clicking a document row opens a centered modal overlay with the history table; close via × button, backdrop click, or Escape key
 - **HTML constants:** `LOGIN_PAGE_HTML` and `DASHBOARD_HTML` are JS template literals in `src/index.js` - note escaped backticks/quotes in onclick handlers
 - **Progress bars** use PicoCSS native `<progress value="x" max="100">` element (not custom spans) - PicoCSS styles it via `--pico-progress-color`
 - **MD5 document IDs:** `displayTitle()` truncates 32-char hex hashes to first 8 chars + `…` when no title/filename exists
 - **Device IDs in history table:** truncated to first 4 chars + `…` with full ID shown on hover via `title` attribute
+- **Device retail names:** `deviceRetailName()` maps KOReader device model names (e.g., `KindlePaperWhite5`) to friendly retail names (e.g., "Kindle Paperwhite 5") — used in charts and history tables
 
 ### Web UI routes
 
@@ -68,6 +69,9 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
 | `GET` | `/web/api/documents/:document/history` | JSON sync history for a document |
 | `GET` | `/web/api/reading-stats` | JSON reading duration stats per document |
 | `GET` | `/web/api/device-stats` | JSON sync count and duration per device |
+| `GET` | `/web/api/timeline` | JSON recent sync log (last 100 entries) |
+| `POST` | `/web/api/change-password` | Body `{password}` (MD5 hash). Changes user password. |
+| `POST` | `/web/api/maintenance` | Cleans up old sync_log entries (older than 90 days) |
 
 Session cookies: `HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000`; `Secure` added on HTTPS. Expired sessions (30 days) are cleaned up on any session access.
 
@@ -93,6 +97,7 @@ Session cookies: `HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000`; `Secure` 
 - Root `.gitignore` is mostly a Python template leftover; project-specific ignore is mainly `data/db.json` (legacy).
 - README deploy badge points at upstream `boypt/koreader-sync-cf`.
 - Web UI HTML is inside JS template literals - backticks and `${}` in inline JS/CSS must be escaped (`\\'`, `\\\``); editing HTML requires care with escaping.
+- **Escape rule for template literals:** When adding JS code (e.g., Chart.js tooltip callbacks) inside `LOGIN_PAGE_HTML` or `DASHBOARD_HTML`, use `\\n` for newlines, not `\n`. The template literal itself provides one level of escaping.
 - PicoCSS v2 CSS variables differ from v1 - use `--pico-primary`, `--pico-muted-color`, `--pico-muted-border-color` etc., not `--pico-color-*` prefixes.
 - Chart.js is loaded via CDN and used for Statistics charts (device activity bar chart + top books by duration horizontal bar chart) — themes are read from `--pico-primary` via `getComputedStyle`.
 - Simple-DataTables reads `data-order` (not `data-sort`) on `<td>` for custom sort values - use `data-order` with raw timestamp for time columns that display relative time.
