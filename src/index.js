@@ -1261,10 +1261,9 @@ async function loadReadingStats() {
   html += '<thead><tr>';
   html += '<th>Title</th>';
   html += '<th>Authors</th>';
-  html += '<th>First Sync</th>';
-  html += '<th>Last Sync</th>';
   html += '<th>Duration</th>';
   html += '<th>Max Progress</th>';
+  html += '<th>Est. Finish</th>';
   html += '<th>Events</th>';
   html += '</tr></thead><tbody>';
   data.forEach(function(item) {
@@ -1275,10 +1274,13 @@ async function loadReadingStats() {
     html += '<tr>';
     html += '<td>' + escapeHtml(title) + '</td>';
     html += '<td>' + escapeHtml(item.authors || '') + '</td>';
-    html += '<td data-order="' + (item.first_sync || 0) + '">' + relativeTime(item.first_sync) + '</td>';
-    html += '<td data-order="' + (item.last_sync || 0) + '">' + relativeTime(item.last_sync) + '</td>';
     html += '<td data-order="' + (item.duration_seconds || 0) + '"><span title="' + (item.duration_seconds || 0) + ' seconds">' + formatDuration(item.duration_seconds) + '</span></td>';
     html += '<td>' + renderProgressBar(item.latest_percentage) + '</td>';
+    if (item.fin_by) {
+      html += '<td data-order="' + item.fin_by + '">' + relativeTime(item.fin_by) + '</td>';
+    } else {
+      html += '<td>—</td>';
+    }
     html += '<td>' + escapeHtml(String(item.event_count || 0)) + '</td>';
     html += '</tr>';
   });
@@ -1622,21 +1624,68 @@ export default {
     if (method === 'GET' && pathname === '/web/api/reading-stats') {
       const sessionUser = await getSessionUser(db, request);
       if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
-      const res = await db.prepare(`
-        SELECT
-          COALESCE(NULLIF(title, ''), NULLIF(filename, ''), document) AS display_title,
-          MIN(timestamp) AS first_sync,
-          MAX(timestamp) AS last_sync,
-          (MAX(timestamp) - MIN(timestamp)) AS duration_seconds,
-          COUNT(*) AS event_count,
-          MAX(authors) AS authors,
-          MAX(percentage) AS latest_percentage
-        FROM sync_log
-        WHERE username = ?
-        GROUP BY COALESCE(NULLIF(title, ''), NULLIF(filename, ''), document)
-        ORDER BY duration_seconds DESC
-      `).bind(sessionUser).all();
-      return JSON_RESPONSE(200, res.results || []);
+      const res = await db.prepare(
+        'SELECT document, title, filename, authors, percentage, timestamp FROM sync_log WHERE username = ? ORDER BY timestamp ASC, id ASC'
+      ).bind(sessionUser).all();
+      const rows = res.results || [];
+      // Aggregate per document in JS (grouping by document, not display_title,
+      // so docs with identical titles are not merged).
+      const byDoc = new Map();
+      for (const row of rows) {
+        let agg = byDoc.get(row.document);
+        if (!agg) {
+          agg = { events: [], display_title: null, authors: null, first_sync: null, last_sync: null, latest_percentage: null };
+          byDoc.set(row.document, agg);
+        }
+        agg.events.push(row);
+        const t = row.title || row.filename || row.document;
+        if (t) agg.display_title = t; // last non-empty wins
+        if (row.authors) agg.authors = row.authors; // last non-empty wins
+        if (agg.first_sync === null || row.timestamp < agg.first_sync) agg.first_sync = row.timestamp;
+        if (agg.last_sync === null || row.timestamp > agg.last_sync) agg.last_sync = row.timestamp;
+        if (row.percentage !== null && row.percentage !== undefined &&
+            (agg.latest_percentage === null || row.percentage > agg.latest_percentage)) {
+          agg.latest_percentage = row.percentage;
+        }
+      }
+      const out = [];
+      for (const [document, agg] of byDoc) {
+        const first_sync = agg.first_sync;
+        const last_sync = agg.last_sync;
+        // fin_by estimation: pace from sync-event percentages (0..1 fraction)
+        const pctEvents = agg.events.filter((e) => e.percentage !== null && e.percentage !== undefined && e.timestamp !== null && e.timestamp !== undefined);
+        let fin_by = null;
+        if (pctEvents.length >= 2) {
+          const last = pctEvents[pctEvents.length - 1];
+          if (last.percentage < 0.999) {
+            // Window = final event plus up to 3 immediately preceding events
+            const k = pctEvents[Math.max(0, pctEvents.length - 4)];
+            const dp = last.percentage - k.percentage;
+            const dt = last.timestamp - k.timestamp; // seconds
+            if (dt > 0 && dp > 0) {
+              const speedPerDay = dp / (dt / 86400);
+              const daysLeft = (1 - last.percentage) / speedPerDay;
+              if (daysLeft <= 3650) { // unreliable beyond ~10 years
+                let f = Math.round(last.timestamp + daysLeft * 86400);
+                // round to end of that UTC day
+                fin_by = (Math.floor(f / 86400) + 1) * 86400 - 1;
+              }
+            }
+          }
+        }
+        out.push({
+          display_title: agg.display_title || document,
+          authors: agg.authors,
+          first_sync,
+          last_sync,
+          duration_seconds: (first_sync !== null && last_sync !== null) ? (last_sync - first_sync) : null,
+          event_count: agg.events.length,
+          latest_percentage: agg.latest_percentage,
+          fin_by
+        });
+      }
+      out.sort((a, b) => (b.duration_seconds || 0) - (a.duration_seconds || 0));
+      return JSON_RESPONSE(200, out);
     }
 
     // GET /web/api/device-stats
