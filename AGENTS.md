@@ -31,6 +31,15 @@ bunx wrangler d1 migrations apply kosync --remote
 
 No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes below.
 
+### Local test accounts (in local D1; plaintext is what you enter in web login)
+
+| Username | Password |
+|----------|----------|
+| `demo` | `demo` |
+| `tester` | `secret` |
+| `testuser` | `testpass` |
+| `user2` | `testpass` |
+
 ## Architecture (non-obvious)
 
 - **Binding:** `env.KOSYNC_DB` → D1 `kosync`, `migrations_dir = "migrations"`.
