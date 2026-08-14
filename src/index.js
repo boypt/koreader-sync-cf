@@ -1265,6 +1265,7 @@ async function loadReadingStats() {
   html += '<th>Max Progress</th>';
   html += '<th>Est. Finish</th>';
   html += '<th>Events</th>';
+  html += '<th data-hidden="true">Last Sync</th>';
   html += '</tr></thead><tbody>';
   data.forEach(function(item) {
     var title = item.display_title || '';
@@ -1282,6 +1283,7 @@ async function loadReadingStats() {
       html += '<td>—</td>';
     }
     html += '<td>' + escapeHtml(String(item.event_count || 0)) + '</td>';
+    html += '<td data-order="' + (item.last_sync || 0) + '">' + (item.last_sync || 0) + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
@@ -1291,7 +1293,10 @@ async function loadReadingStats() {
     searchable: true,
     fixedHeight: false,
     perPage: 10,
-    perPageSelect: [10, 25, 50]
+    perPageSelect: [10, 25, 50],
+    columns: [
+      { select: 6, sort: 'desc' }
+    ]
   });
 }
 
