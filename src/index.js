@@ -1657,21 +1657,29 @@ export default {
       for (const [document, agg] of byDoc) {
         const first_sync = agg.first_sync;
         const last_sync = agg.last_sync;
-        // fin_by estimation: pace from sync-event percentages (0..1 fraction)
+        // fin_by estimation: average reading pace across ALL sync events.
+        // For each consecutive pair of sync events, compute the reading speed
+        // (fraction of book per second), then average over all of them.
         const pctEvents = agg.events.filter((e) => e.percentage !== null && e.percentage !== undefined && e.timestamp !== null && e.timestamp !== undefined);
         let fin_by = null;
         if (pctEvents.length >= 2) {
           const last = pctEvents[pctEvents.length - 1];
           if (last.percentage < 0.999) {
-            // Window = final event plus up to 3 immediately preceding events
-            const k = pctEvents[Math.max(0, pctEvents.length - 4)];
-            const dp = last.percentage - k.percentage;
-            const dt = last.timestamp - k.timestamp; // seconds
-            if (dt > 0 && dp > 0) {
-              const speedPerDay = dp / (dt / 86400);
-              const daysLeft = (1 - last.percentage) / speedPerDay;
-              if (daysLeft <= 3650) { // unreliable beyond ~10 years
-                let f = Math.round(last.timestamp + daysLeft * 86400);
+            let speedSum = 0;
+            let speedCount = 0;
+            for (let i = 1; i < pctEvents.length; i++) {
+              const dt = pctEvents[i].timestamp - pctEvents[i - 1].timestamp; // seconds
+              const dp = pctEvents[i].percentage - pctEvents[i - 1].percentage;
+              if (dt > 0 && dp > 0) { // skip regressions and no-progress gaps
+                speedSum += dp / dt; // fraction of book per second
+                speedCount++;
+              }
+            }
+            if (speedCount > 0) {
+              const avgSpeed = speedSum / speedCount;
+              const secsLeft = (1 - last.percentage) / avgSpeed;
+              if (secsLeft <= 3650 * 86400) { // unreliable beyond ~10 years
+                let f = Math.round(last.timestamp + secsLeft);
                 // round to end of that UTC day
                 fin_by = (Math.floor(f / 86400) + 1) * 86400 - 1;
               }
