@@ -1648,40 +1648,50 @@ export default {
         if (row.authors) agg.authors = row.authors; // last non-empty wins
         if (agg.first_sync === null || row.timestamp < agg.first_sync) agg.first_sync = row.timestamp;
         if (agg.last_sync === null || row.timestamp > agg.last_sync) agg.last_sync = row.timestamp;
-        if (row.percentage !== null && row.percentage !== undefined &&
-            (agg.latest_percentage === null || row.percentage > agg.latest_percentage)) {
+        if (row.percentage !== null && row.percentage !== undefined) {
+          // Rows are ordered chronologically, so the last valid percentage is
+          // the actual latest reading position rather than the historical max.
           agg.latest_percentage = row.percentage;
         }
       }
       const out = [];
+      const currentDayEnd = (Math.floor(Math.floor(Date.now() / 1000) / 86400) + 1) * 86400 - 1;
       for (const [document, agg] of byDoc) {
         const first_sync = agg.first_sync;
         const last_sync = agg.last_sync;
-        // fin_by estimation: average reading pace across ALL sync events.
-        // For each consecutive pair of sync events, compute the reading speed
-        // (fraction of book per second), then average over all of them.
+        // fin_by estimation: derive reading pace from consecutive sync events,
+        // excluding extreme outliers (long idle gaps or sudden jumps) so a single
+        // abnormal event can't skew the estimate.
         const pctEvents = agg.events.filter((e) => e.percentage !== null && e.percentage !== undefined && e.timestamp !== null && e.timestamp !== undefined);
         let fin_by = null;
         if (pctEvents.length >= 2) {
           const last = pctEvents[pctEvents.length - 1];
           if (last.percentage < 0.999) {
-            let speedSum = 0;
-            let speedCount = 0;
+            const speeds = [];
             for (let i = 1; i < pctEvents.length; i++) {
               const dt = pctEvents[i].timestamp - pctEvents[i - 1].timestamp; // seconds
               const dp = pctEvents[i].percentage - pctEvents[i - 1].percentage;
               if (dt > 0 && dp > 0) { // skip regressions and no-progress gaps
-                speedSum += dp / dt; // fraction of book per second
-                speedCount++;
+                speeds.push(dp / dt); // fraction of book per second
               }
             }
-            if (speedCount > 0) {
-              const avgSpeed = speedSum / speedCount;
+            if (speeds.length > 0) {
+              // Sort and trim the lowest/highest speeds to exclude extreme data,
+              // then average the middle band (trimmed mean).
+              speeds.sort((a, b) => a - b);
+              let band = speeds;
+              if (speeds.length >= 5) {
+                const cut = Math.max(1, Math.floor(speeds.length * 0.25));
+                band = speeds.slice(cut, speeds.length - cut);
+              }
+              const avgSpeed = band.reduce((sum, v) => sum + v, 0) / band.length;
               const secsLeft = (1 - last.percentage) / avgSpeed;
               if (secsLeft <= 3650 * 86400) { // unreliable beyond ~10 years
                 let f = Math.round(last.timestamp + secsLeft);
                 // round to end of that UTC day
                 fin_by = (Math.floor(f / 86400) + 1) * 86400 - 1;
+                // Never show an estimated finish in the past.
+                fin_by = Math.max(fin_by, currentDayEnd);
               }
             }
           }
