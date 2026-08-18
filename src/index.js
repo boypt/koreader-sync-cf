@@ -1630,7 +1630,7 @@ export default {
       const sessionUser = await getSessionUser(db, request);
       if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
       const res = await db.prepare(
-        'SELECT document, title, filename, authors, percentage, timestamp FROM sync_log WHERE username = ? ORDER BY timestamp ASC, id ASC'
+        'SELECT document, title, filename, authors, percentage, timestamp, device, device_id FROM sync_log WHERE username = ? ORDER BY timestamp ASC, id ASC'
       ).bind(sessionUser).all();
       const rows = res.results || [];
       // Aggregate per document in JS (grouping by document, not display_title,
@@ -1639,10 +1639,13 @@ export default {
       for (const row of rows) {
         let agg = byDoc.get(row.document);
         if (!agg) {
-          agg = { events: [], display_title: null, authors: null, first_sync: null, last_sync: null, latest_percentage: null };
+          agg = { events: [], pushEvents: [], display_title: null, authors: null, first_sync: null, last_sync: null, latest_percentage: null };
           byDoc.set(row.document, agg);
         }
         agg.events.push(row);
+        if (row.device) {
+          agg.pushEvents.push(row);
+        }
         const t = row.title || row.filename || row.document;
         if (t) agg.display_title = t; // last non-empty wins
         if (row.authors) agg.authors = row.authors; // last non-empty wins
@@ -1655,43 +1658,40 @@ export default {
         }
       }
       const out = [];
-      const currentDayEnd = (Math.floor(Math.floor(Date.now() / 1000) / 86400) + 1) * 86400 - 1;
+      const now = Math.floor(Date.now() / 1000);
       for (const [document, agg] of byDoc) {
         const first_sync = agg.first_sync;
         const last_sync = agg.last_sync;
-        // fin_by estimation: derive reading pace from consecutive sync events,
-        // excluding extreme outliers (long idle gaps or sudden jumps) so a single
-        // abnormal event can't skew the estimate.
-        const pctEvents = agg.events.filter((e) => e.percentage !== null && e.percentage !== undefined && e.timestamp !== null && e.timestamp !== undefined);
+        // fin_by estimation:
+        // Ignore GET events (which do not push new reading progress) and use actual push records.
+        // Compute delta time and delta progress from the most recent push records to determine
+        // average reading speed, calculate remaining time to reach progress = 1.0, and add the offset
+        // to the current time to estimate finish datetime.
+        const validPushes = agg.pushEvents.filter(
+          (e) => typeof e.percentage === 'number' && e.percentage >= 0 && typeof e.timestamp === 'number' && e.timestamp > 0
+        );
         let fin_by = null;
-        if (pctEvents.length >= 2) {
-          const last = pctEvents[pctEvents.length - 1];
-          if (last.percentage < 0.999) {
+        if (validPushes.length >= 2) {
+          const currentPct = agg.latest_percentage ?? validPushes[validPushes.length - 1].percentage;
+          if (currentPct < 0.999) {
+            // Take up to the last 6 push records (providing up to 5 consecutive intervals)
+            const recent = validPushes.slice(-6);
             const speeds = [];
-            for (let i = 1; i < pctEvents.length; i++) {
-              const dt = pctEvents[i].timestamp - pctEvents[i - 1].timestamp; // seconds
-              const dp = pctEvents[i].percentage - pctEvents[i - 1].percentage;
-              if (dt > 0 && dp > 0) { // skip regressions and no-progress gaps
+            for (let i = 1; i < recent.length; i++) {
+              const dt = recent[i].timestamp - recent[i - 1].timestamp; // seconds
+              const dp = recent[i].percentage - recent[i - 1].percentage; // progress delta
+              if (dt > 0 && dp > 0) { // skip regressions and no-progress intervals
                 speeds.push(dp / dt); // fraction of book per second
               }
             }
             if (speeds.length > 0) {
-              // Sort and trim the lowest/highest speeds to exclude extreme data,
-              // then average the middle band (trimmed mean).
-              speeds.sort((a, b) => a - b);
-              let band = speeds;
-              if (speeds.length >= 5) {
-                const cut = Math.max(1, Math.floor(speeds.length * 0.25));
-                band = speeds.slice(cut, speeds.length - cut);
-              }
-              const avgSpeed = band.reduce((sum, v) => sum + v, 0) / band.length;
-              const secsLeft = (1 - last.percentage) / avgSpeed;
-              if (secsLeft <= 3650 * 86400) { // unreliable beyond ~10 years
-                let f = Math.round(last.timestamp + secsLeft);
-                // round to end of that UTC day
-                fin_by = (Math.floor(f / 86400) + 1) * 86400 - 1;
-                // Never show an estimated finish in the past.
-                fin_by = Math.max(fin_by, currentDayEnd);
+              const avgSpeed = speeds.reduce((sum, v) => sum + v, 0) / speeds.length;
+              if (avgSpeed > 0) {
+                const remainingProgress = Math.max(0, 1.0 - currentPct);
+                const secsLeft = remainingProgress / avgSpeed;
+                if (Number.isFinite(secsLeft) && secsLeft > 0 && secsLeft <= 3650 * 86400) {
+                  fin_by = Math.round(now + secsLeft);
+                }
               }
             }
           }
