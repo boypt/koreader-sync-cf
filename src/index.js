@@ -1224,14 +1224,15 @@ async function changePassword(e) {
 
 /* —— Maintenance —— */
 async function runMaintenance() {
-  if (!confirm('This will prune sync_log (keep first & last per document) and remove documents older than 3 months. Continue?')) return;
+  if (!confirm('This will clean up old records: sync_log (>1 year), documents (>1 year), and expired sessions (>1 month). Continue?')) return;
   var res = await fetch('/web/api/maintenance', { method: 'POST' });
   if (res.status === 401) { window.location.href = '/web'; return; }
   var data = await res.json();
   var msg = 'Maintenance complete.\\n';
-  if (data.log_deleted) msg += '\\n- ' + data.log_deleted + ' sync_log rows pruned';
-  if (data.docs_deleted) msg += '\\n- ' + data.docs_deleted + ' stale documents removed';
-  if (!data.log_deleted && !data.docs_deleted) msg += '\\nNothing to clean up.';
+  if (data.log_deleted) msg += '\\n- ' + data.log_deleted + ' sync_log rows cleaned (>1 yr)';
+  if (data.docs_deleted) msg += '\\n- ' + data.docs_deleted + ' stale documents removed (>1 yr)';
+  if (data.sessions_deleted) msg += '\\n- ' + data.sessions_deleted + ' expired sessions removed (>1 mo)';
+  if (!data.log_deleted && !data.docs_deleted && !data.sessions_deleted) msg += '\\nNothing to clean up.';
   if (data.error) msg = 'Error: ' + data.error;
   alert(msg);
   if (data.ok) {
@@ -1745,29 +1746,36 @@ export default {
       const sessionUser = await getSessionUser(db, request);
       if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
       try {
-        const threeMonthsAgo = Math.floor(Date.now() / 1000) - 90 * 86400;
+        const now = Math.floor(Date.now() / 1000);
+        const oneYearAgo = now - 365 * 86400;
+        const oneMonthAgo = now - 30 * 86400;
         let logDeleted = 0;
         let docDeleted = 0;
+        let sessionsDeleted = 0;
 
-        // Prune sync_log: keep only first & last per document
+        // Clean up sync_log older than 1 year
         const logResult = await db.prepare(`
-          DELETE FROM sync_log
-          WHERE username = ?
-            AND id NOT IN (SELECT MIN(id) FROM sync_log WHERE username = ? GROUP BY document)
-            AND id NOT IN (SELECT MAX(id) FROM sync_log WHERE username = ? GROUP BY document)
-        `).bind(sessionUser, sessionUser, sessionUser).run();
+          DELETE FROM sync_log WHERE username = ? AND created_at < ?
+        `).bind(sessionUser, oneYearAgo).run();
         logDeleted = logResult.meta.changes || 0;
 
-        // Remove documents with last sync > 3 months ago
+        // Remove documents with last sync older than 1 year
         const docResult = await db.prepare(`
           DELETE FROM documents WHERE username = ? AND timestamp < ?
-        `).bind(sessionUser, threeMonthsAgo).run();
+        `).bind(sessionUser, oneYearAgo).run();
         docDeleted = docResult.meta.changes || 0;
+
+        // Clean up expired sessions older than 1 month
+        const sessionResult = await db.prepare(`
+          DELETE FROM sessions WHERE created_at < ?
+        `).bind(oneMonthAgo).run();
+        sessionsDeleted = sessionResult.meta.changes || 0;
 
         return JSON_RESPONSE(200, {
           ok: true,
           log_deleted: logDeleted,
-          docs_deleted: docDeleted
+          docs_deleted: docDeleted,
+          sessions_deleted: sessionsDeleted
         });
       } catch (e) {
         return JSON_RESPONSE(500, { error: e.message });

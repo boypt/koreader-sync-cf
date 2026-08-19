@@ -80,7 +80,7 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
 | `GET` | `/web/api/device-stats` | JSON sync count and duration per device |
 | `GET` | `/web/api/timeline` | JSON recent sync log (last 100 entries) |
 | `POST` | `/web/api/change-password` | Body `{password}` (MD5 hash). Changes user password. |
-| `POST` | `/web/api/maintenance` | Cleans up old sync_log entries (older than 90 days) |
+| `POST` | `/web/api/maintenance` | Cleans up old sync_log (>1 yr), documents (>1 yr), and expired sessions (>1 mo) |
 
 Session cookies: `HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000`; `Secure` added on HTTPS. Expired sessions (30 days) are cleaned up on any session access.
 
