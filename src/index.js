@@ -1663,11 +1663,9 @@ export default {
       for (const [document, agg] of byDoc) {
         const first_sync = agg.first_sync;
         const last_sync = agg.last_sync;
-        // fin_by estimation:
-        // Ignore GET events (which do not push new reading progress) and use actual push records.
-        // Compute delta time and delta progress from the most recent push records to determine
-        // average reading speed, calculate remaining time to reach progress = 1.0, and add the offset
-        // to the current time to estimate finish datetime.
+        // fin_by estimation (day granularity):
+        // "一天读了多少进度" — collapse intra-day syncs, compute avg daily progress,
+        // then estimate remaining days based on active reading days (not continuous seconds).
         const validPushes = agg.pushEvents.filter(
           (e) => typeof e.percentage === 'number' && e.percentage >= 0 && typeof e.timestamp === 'number' && e.timestamp > 0
         );
@@ -1675,23 +1673,57 @@ export default {
         if (validPushes.length >= 2) {
           const currentPct = agg.latest_percentage ?? validPushes[validPushes.length - 1].percentage;
           if (currentPct < 0.999) {
-            // Take up to the last 6 push records (providing up to 5 consecutive intervals)
-            const recent = validPushes.slice(-6);
-            const speeds = [];
-            for (let i = 1; i < recent.length; i++) {
-              const dt = recent[i].timestamp - recent[i - 1].timestamp; // seconds
-              const dp = recent[i].percentage - recent[i - 1].percentage; // progress delta
-              if (dt > 0 && dp > 0) { // skip regressions and no-progress intervals
-                speeds.push(dp / dt); // fraction of book per second
+            // Group pushes by UTC day — multiple syncs on same day collapse to one day record
+            const dayMap = new Map();
+            for (const row of validPushes) {
+              const dayKey = Math.floor(row.timestamp / 86400);
+              const existing = dayMap.get(dayKey);
+              if (!existing) {
+                dayMap.set(dayKey, { dayKey, firstPct: row.percentage, lastPct: row.percentage });
+              } else {
+                existing.lastPct = row.percentage; // last sync of the day wins
               }
             }
-            if (speeds.length > 0) {
-              const avgSpeed = speeds.reduce((sum, v) => sum + v, 0) / speeds.length;
-              if (avgSpeed > 0) {
-                const remainingProgress = Math.max(0, 1.0 - currentPct);
-                const secsLeft = remainingProgress / avgSpeed;
-                if (Number.isFinite(secsLeft) && secsLeft > 0 && secsLeft <= 3650 * 86400) {
-                  fin_by = Math.round(now + secsLeft);
+            const distinctDays = Array.from(dayMap.values()).sort((a, b) => a.dayKey - b.dayKey);
+            const recentDays = distinctDays.slice(-14); // recent window: up to 14 active days
+
+            if (recentDays.length >= 1) {
+              // Compute per-day progress deltas
+              // - First active day: intra-day progress (covers multiple syncs same day)
+              // - Subsequent active days: day-over-day progress (covers exactly one day's read amount)
+              const dailyDeltas = [];
+              const d0 = recentDays[0].lastPct - recentDays[0].firstPct;
+              if (d0 > 0) dailyDeltas.push(d0);
+              for (let i = 1; i < recentDays.length; i++) {
+                const delta = recentDays[i].lastPct - recentDays[i - 1].lastPct;
+                if (delta > 0) dailyDeltas.push(delta);
+              }
+              // If only one distinct day and it had a single push (d0==0), no delta yet —
+              // fall through to no estimate (need at least one positive daily increment)
+
+              // Filter outliers: ignore >60% per day (unrealistic) and tiny noise
+              let deltas = dailyDeltas.filter((v) => v > 0 && v < 0.6);
+              if (deltas.length === 0) deltas = dailyDeltas.filter((v) => v > 0);
+
+              if (deltas.length >= 5) {
+                // Trim 25% low and high extremes for robustness
+                deltas.sort((a, b) => a - b);
+                const cut = Math.max(1, Math.floor(deltas.length * 0.25));
+                deltas = deltas.slice(cut, deltas.length - cut);
+              }
+
+              if (deltas.length > 0) {
+                const avgDaily = deltas.reduce((s, v) => s + v, 0) / deltas.length;
+                if (avgDaily > 0 && Number.isFinite(avgDaily)) {
+                  const remaining = Math.max(0, 1.0 - currentPct);
+                  const daysLeftExact = remaining / avgDaily;
+                  if (Number.isFinite(daysLeftExact) && daysLeftExact > 0 && daysLeftExact <= 3650) {
+                    fin_by = Math.round(now + daysLeftExact * 86400);
+                    // Round to end of that UTC day and ensure not in past
+                    fin_by = (Math.floor(fin_by / 86400) + 1) * 86400 - 1;
+                    const todayEnd = (Math.floor(now / 86400) + 1) * 86400 - 1;
+                    if (fin_by < todayEnd) fin_by = todayEnd;
+                  }
                 }
               }
             }
