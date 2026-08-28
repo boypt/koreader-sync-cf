@@ -1135,12 +1135,16 @@ async function loadHistory(docEncoded, rowEl) {
   data.forEach(function(entry) {
     html += '<tr>';
     html += '<td>' + renderProgressBar(entry.percentage) + '</td>';
-    var deviceLabel = escapeHtml(deviceRetailName(entry.device) || '');
-    if (entry.device_id) {
-      deviceLabel += ' <span title="' + escapeHtml(entry.device_id) + '">(' + escapeHtml(entry.device_id.substring(0, 4)) + '…)</span>';
-    }
-    if (!deviceLabel) {
-      deviceLabel = '<span style="color:var(--pico-muted-color)">NONE(Pull Synced)</span>';
+    var name = deviceRetailName(entry.device);
+    var deviceLabel = '';
+    if (name) {
+      if (entry.device_id) {
+        deviceLabel = '<span title="' + escapeHtml(entry.device_id) + '">' + escapeHtml(name) + '</span>';
+      } else {
+        deviceLabel = escapeHtml(name);
+      }
+    } else {
+      deviceLabel = '<span style="color:var(--pico-muted-color)"' + (entry.device_id ? ' title="' + escapeHtml(entry.device_id) + '"' : '') + '>(Pulled)</span>';
     }
     html += '<td>' + deviceLabel + '</td>';
     html += '<td data-order="' + (entry.timestamp || 0) + '">' + relativeTime(entry.timestamp) + '</td>';

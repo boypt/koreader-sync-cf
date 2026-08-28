@@ -63,7 +63,7 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
 - **HTML constants:** `LOGIN_PAGE_HTML` and `DASHBOARD_HTML` are JS template literals in `src/index.js` - note escaped backticks/quotes in onclick handlers
 - **Progress bars** use PicoCSS native `<progress value="x" max="100">` element (not custom spans) - PicoCSS styles it via `--pico-progress-color`
 - **MD5 document IDs:** `displayTitle()` truncates 32-char hex hashes to first 8 chars + `…` when no title/filename exists
-- **Device IDs in history table:** truncated to first 4 chars + `…` with full ID shown on hover via `title` attribute
+- **Device IDs in history table:** Device column displays friendly retail name only, with full Device ID shown on hover via `title` attribute; empty device records display `(Pulled)`
 - **Device retail names:** `deviceRetailName()` maps KOReader device model names (e.g., `KindlePaperWhite5`) to friendly retail names (e.g., "Kindle Paperwhite 5") — used in charts and history tables
 
 ### Web UI routes
