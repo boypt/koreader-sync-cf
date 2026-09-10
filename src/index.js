@@ -3,9 +3,9 @@ const JSON_RESPONSE = (status, body) => new Response(JSON.stringify(body), {
   headers: { 'Content-Type': 'application/json' }
 });
 
-const HTML_RESPONSE = (html) => new Response(html, {
+const HTML_RESPONSE = (html, extraHeaders) => new Response(html, {
   status: 200,
-  headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  headers: { 'Content-Type': 'text/html; charset=utf-8', ...extraHeaders }
 });
 
 function getEnvBool(env, key, fallback = false) {
@@ -30,10 +30,9 @@ function randomDeviceId() {
 }
 
 function generateSessionToken() {
-  if (crypto && crypto.randomUUID) {
-    return crypto.randomUUID().replace(/-/g, '');
-  }
-  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function getSessionUser(db, request) {
@@ -1826,8 +1825,15 @@ export default {
       });
     }
 
-    // GET /web
+    // GET /web (redirect to dashboard if session is still valid)
     if (method === 'GET' && pathname === '/web') {
+      const sessionUser = await getSessionUser(db, request);
+      if (sessionUser) {
+        return new Response(null, {
+          status: 302,
+          headers: { 'Location': '/web/dashboard' }
+        });
+      }
       return HTML_RESPONSE(LOGIN_PAGE_HTML);
     }
 
@@ -1881,7 +1887,14 @@ export default {
           headers: { 'Location': '/web' }
         });
       }
-      return HTML_RESPONSE(DASHBOARD_HTML);
+      // Sliding renewal: refresh session TTL to a full 30 days on each dashboard visit
+      const headers = {};
+      const match = (request.headers.get('Cookie') || '').match(/session_token=([^;]+)/);
+      if (match) {
+        await db.prepare('UPDATE sessions SET created_at = unixepoch() WHERE token = ?').bind(match[1]).run();
+        headers['Set-Cookie'] = `session_token=${match[1]}; HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000; Expires=${expires}${cookieSecure}`;
+      }
+      return HTML_RESPONSE(DASHBOARD_HTML, headers);
     }
 
     return new Response('Not found', { status: 404 });
