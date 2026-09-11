@@ -1467,434 +1467,481 @@ loadCharts();
 </body>
 </html>`;
 
+// ===== Route handlers =====
+// Each handler receives a request-scoped context object assembled in `fetch` below.
+
+async function handleCreateUser(ctx) {
+  const { request, env, db } = ctx;
+  const openRegs = getEnvBool(env, 'OPEN_REGISTRATIONS', true);
+  if (!openRegs) return JSON_RESPONSE(403, 'This server is currently not accepting new registrations.');
+
+  const body = await parseJson(request);
+  if (!body || !body.username || !body.password) return JSON_RESPONSE(400, { message: 'Invalid request' });
+
+  const existing = await db.prepare('SELECT username FROM users WHERE username = ?').bind(body.username).all();
+  if (existing.results && existing.results.length) {
+    return JSON_RESPONSE(409, 'Username is already registered.');
+  }
+
+  await db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').bind(body.username, body.password).run();
+  return JSON_RESPONSE(201, { username: body.username });
+}
+
+async function handleUserAuth(ctx) {
+  const { db, authUser, authKey } = ctx;
+  if (!authUser || !authKey) return JSON_RESPONSE(401, { message: 'Unauthorized' });
+
+  const found = await db.prepare('SELECT username FROM users WHERE username = ? AND password = ?').bind(authUser, authKey).all();
+  if (found.results && found.results.length) {
+    return JSON_RESPONSE(200, { authorized: 'OK' });
+  }
+
+  const exists = await db.prepare('SELECT username FROM users WHERE username = ?').bind(authUser).all();
+  if (exists.results && exists.results.length) {
+    return JSON_RESPONSE(401, { message: 'Unauthorized' });
+  }
+  return JSON_RESPONSE(403, { message: 'Forbidden' });
+}
+
+async function handlePutProgress(ctx) {
+  const { request, db, authUser, authKey } = ctx;
+  if (!authUser || !authKey) return JSON_RESPONSE(401, { message: 'Unauthorized' });
+
+  const body = await parseJson(request);
+  if (!body || !body.document || body.progress === undefined || body.percentage === undefined || !body.device || !body.device_id) {
+    return JSON_RESPONSE(500, 'Unknown server error');
+  }
+
+  const authCheck = await db.prepare('SELECT username FROM users WHERE username = ? AND password = ?').bind(authUser, authKey).all();
+  if (!authCheck.results || !authCheck.results.length) return JSON_RESPONSE(401, { message: 'Unauthorized' });
+
+  const filename = body.metadata?.filename ?? null;
+  const title = body.metadata?.title ?? null;
+  const authors = body.metadata?.authors ?? null;
+  const timestamp = Math.floor(Date.now() / 1000);
+
+  await db.batch([
+    db.prepare(`INSERT INTO sync_log
+      (username, document, progress, percentage, device, device_id, timestamp, filename, title, authors)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(authUser, body.document, body.progress, body.percentage, body.device, body.device_id, timestamp, filename, title, authors),
+    db.prepare(`INSERT OR REPLACE INTO documents
+      (username, document, progress, percentage, device, device_id, timestamp, filename, title, authors)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(authUser, body.document, body.progress, body.percentage, body.device, body.device_id, timestamp, filename, title, authors)
+  ]);
+
+  return JSON_RESPONSE(200, { document: body.document, timestamp });
+}
+
+async function handleGetProgress(ctx) {
+  const { env, db, authUser, authKey, params } = ctx;
+  const document = decodeURIComponent(params[0]);
+  if (!authUser || !authKey) return JSON_RESPONSE(401, { message: 'Unauthorized' });
+  if (!document) return JSON_RESPONSE(500, 'Unknown server error');
+
+  const existsUser = await db.prepare('SELECT username FROM users WHERE username = ?').bind(authUser).all();
+  if (!existsUser.results || !existsUser.results.length) return JSON_RESPONSE(403, { message: 'Forbidden' });
+
+  const authCheck = await db.prepare('SELECT username FROM users WHERE username = ? AND password = ?').bind(authUser, authKey).all();
+  if (!authCheck.results || !authCheck.results.length) return JSON_RESPONSE(401, { message: 'Unauthorized' });
+
+  const res = await db.prepare('SELECT * FROM documents WHERE username = ? AND document = ?').bind(authUser, document).all();
+  if (res.results && res.results.length) {
+    const row = res.results[0];
+    const rrdi = getEnvBool(env, 'RECEIVE_RANDOM_DEVICE_ID', false);
+    const device_id = rrdi ? randomDeviceId() : row.device_id;
+    const response = {
+      username: authUser,
+      document: row.document,
+      progress: row.progress,
+      percentage: row.percentage,
+      device: row.device,
+      device_id,
+      timestamp: row.timestamp
+    };
+
+    // Log the GET progress event for reading stats (timestamp + book info + progress)
+    const now = Math.floor(Date.now() / 1000);
+    await db.prepare(`INSERT INTO sync_log
+      (username, document, progress, percentage, timestamp, filename, title, authors)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(authUser, row.document, row.progress, row.percentage, now, row.filename, row.title, row.authors)
+      .run();
+
+    return JSON_RESPONSE(200, response);
+  }
+
+  return JSON_RESPONSE(200, {
+    username: authUser,
+  });
+}
+
+async function handleHealthstatus() {
+  return JSON_RESPONSE(200, { message: 'healthy' });
+}
+
+async function handleDocumentHistory(ctx) {
+  const { request, db, params } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+  const document = decodeURIComponent(params[0]);
+  const res = await db.prepare(
+    'SELECT * FROM sync_log WHERE username = ? AND document = ? ORDER BY created_at DESC'
+  ).bind(sessionUser, document).all();
+  return JSON_RESPONSE(200, res.results || []);
+}
+
+async function handleListDocuments(ctx) {
+  const { request, db } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+  const res = await db.prepare(
+    'SELECT document, progress, percentage, device, device_id, timestamp, filename, title, authors FROM documents WHERE username = ? ORDER BY timestamp DESC'
+  ).bind(sessionUser).all();
+  return JSON_RESPONSE(200, res.results || []);
+}
+
+async function handleTimeline(ctx) {
+  const { request, db } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+  const res = await db.prepare(
+    'SELECT * FROM sync_log WHERE username = ? ORDER BY created_at DESC LIMIT 100'
+  ).bind(sessionUser).all();
+  return JSON_RESPONSE(200, res.results || []);
+}
+
+async function handleReadingStats(ctx) {
+  const { request, db } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+  const res = await db.prepare(
+    'SELECT document, title, filename, authors, percentage, timestamp, device, device_id FROM sync_log WHERE username = ? ORDER BY timestamp ASC, id ASC'
+  ).bind(sessionUser).all();
+  const rows = res.results || [];
+  // Aggregate per document in JS (grouping by document, not display_title,
+  // so docs with identical titles are not merged).
+  const byDoc = new Map();
+  for (const row of rows) {
+    let agg = byDoc.get(row.document);
+    if (!agg) {
+      agg = { events: [], pushEvents: [], display_title: null, authors: null, first_sync: null, last_sync: null, latest_percentage: null };
+      byDoc.set(row.document, agg);
+    }
+    agg.events.push(row);
+    if (row.device) {
+      agg.pushEvents.push(row);
+    }
+    const t = row.title || row.filename || row.document;
+    if (t) agg.display_title = t; // last non-empty wins
+    if (row.authors) agg.authors = row.authors; // last non-empty wins
+    if (agg.first_sync === null || row.timestamp < agg.first_sync) agg.first_sync = row.timestamp;
+    if (agg.last_sync === null || row.timestamp > agg.last_sync) agg.last_sync = row.timestamp;
+    if (row.percentage !== null && row.percentage !== undefined) {
+      // Rows are ordered chronologically, so the last valid percentage is
+      // the actual latest reading position rather than the historical max.
+      agg.latest_percentage = row.percentage;
+    }
+  }
+  const out = [];
+  const now = Math.floor(Date.now() / 1000);
+  for (const [document, agg] of byDoc) {
+    const first_sync = agg.first_sync;
+    const last_sync = agg.last_sync;
+    // fin_by estimation (day granularity):
+    // "一天读了多少进度" — collapse intra-day syncs, compute avg daily progress,
+    // then estimate remaining days based on active reading days (not continuous seconds).
+    const validPushes = agg.pushEvents.filter(
+      (e) => typeof e.percentage === 'number' && e.percentage >= 0 && typeof e.timestamp === 'number' && e.timestamp > 0
+    );
+    let fin_by = null;
+    if (validPushes.length >= 2) {
+      const currentPct = agg.latest_percentage ?? validPushes[validPushes.length - 1].percentage;
+      if (currentPct < 0.999) {
+        // Group pushes by UTC day — multiple syncs on same day collapse to one day record
+        const dayMap = new Map();
+        for (const row of validPushes) {
+          const dayKey = Math.floor(row.timestamp / 86400);
+          const existing = dayMap.get(dayKey);
+          if (!existing) {
+            dayMap.set(dayKey, { dayKey, firstPct: row.percentage, lastPct: row.percentage });
+          } else {
+            existing.lastPct = row.percentage; // last sync of the day wins
+          }
+        }
+        const distinctDays = Array.from(dayMap.values()).sort((a, b) => a.dayKey - b.dayKey);
+        const recentDays = distinctDays.slice(-14); // recent window: up to 14 active days
+
+        if (recentDays.length >= 1) {
+          // Compute per-day progress deltas
+          // - First active day: intra-day progress (covers multiple syncs same day)
+          // - Subsequent active days: day-over-day progress (covers exactly one day's read amount)
+          const dailyDeltas = [];
+          const d0 = recentDays[0].lastPct - recentDays[0].firstPct;
+          if (d0 > 0) dailyDeltas.push(d0);
+          for (let i = 1; i < recentDays.length; i++) {
+            const delta = recentDays[i].lastPct - recentDays[i - 1].lastPct;
+            if (delta > 0) dailyDeltas.push(delta);
+          }
+          // If only one distinct day and it had a single push (d0==0), no delta yet —
+          // fall through to no estimate (need at least one positive daily increment)
+
+          // Filter outliers: ignore >60% per day (unrealistic) and tiny noise
+          let deltas = dailyDeltas.filter((v) => v > 0 && v < 0.6);
+          if (deltas.length === 0) deltas = dailyDeltas.filter((v) => v > 0);
+
+          if (deltas.length >= 5) {
+            // Trim 25% low and high extremes for robustness
+            deltas.sort((a, b) => a - b);
+            const cut = Math.max(1, Math.floor(deltas.length * 0.25));
+            deltas = deltas.slice(cut, deltas.length - cut);
+          }
+
+          if (deltas.length > 0) {
+            const avgDaily = deltas.reduce((s, v) => s + v, 0) / deltas.length;
+            if (avgDaily > 0 && Number.isFinite(avgDaily)) {
+              const remaining = Math.max(0, 1.0 - currentPct);
+              const daysLeftExact = remaining / avgDaily;
+              if (Number.isFinite(daysLeftExact) && daysLeftExact > 0 && daysLeftExact <= 3650) {
+                fin_by = Math.round(now + daysLeftExact * 86400);
+                // Round to end of that UTC day and ensure not in past
+                fin_by = (Math.floor(fin_by / 86400) + 1) * 86400 - 1;
+                const todayEnd = (Math.floor(now / 86400) + 1) * 86400 - 1;
+                if (fin_by < todayEnd) fin_by = todayEnd;
+              }
+            }
+          }
+        }
+      }
+    }
+    out.push({
+      display_title: agg.display_title || document,
+      authors: agg.authors,
+      first_sync,
+      last_sync,
+      duration_seconds: (first_sync !== null && last_sync !== null) ? (last_sync - first_sync) : null,
+      event_count: agg.events.length,
+      latest_percentage: agg.latest_percentage,
+      fin_by
+    });
+  }
+  out.sort((a, b) => (b.duration_seconds || 0) - (a.duration_seconds || 0));
+  return JSON_RESPONSE(200, out);
+}
+
+async function handleDeviceStats(ctx) {
+  const { request, db } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+  const res = await db.prepare(`
+    SELECT
+      device,
+      device_id,
+      COUNT(*) AS sync_count,
+      (MAX(timestamp) - MIN(timestamp)) AS total_duration_seconds
+    FROM sync_log
+    WHERE username = ? AND device_id IS NOT NULL AND device_id != ''
+    GROUP BY device, device_id
+    ORDER BY sync_count DESC
+  `).bind(sessionUser).all();
+  return JSON_RESPONSE(200, res.results || []);
+}
+
+async function handleChangePassword(ctx) {
+  const { request, db } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+  const body = await parseJson(request);
+  if (!body || !body.password) return JSON_RESPONSE(400, { ok: false, error: 'Password required' });
+  // Web login sends MD5 hash, so store the hash directly
+  await db.prepare('UPDATE users SET password = ? WHERE username = ?').bind(body.password, sessionUser).run();
+  return JSON_RESPONSE(200, { ok: true });
+}
+
+async function handleMaintenance(ctx) {
+  const { request, db } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const oneYearAgo = now - 365 * 86400;
+    const oneMonthAgo = now - 30 * 86400;
+    let logDeleted = 0;
+    let docDeleted = 0;
+    let sessionsDeleted = 0;
+
+    // Clean up sync_log older than 1 year
+    const logResult = await db.prepare(`
+      DELETE FROM sync_log WHERE username = ? AND created_at < ?
+    `).bind(sessionUser, oneYearAgo).run();
+    logDeleted = logResult.meta.changes || 0;
+
+    // Remove documents with last sync older than 1 year
+    const docResult = await db.prepare(`
+      DELETE FROM documents WHERE username = ? AND timestamp < ?
+    `).bind(sessionUser, oneYearAgo).run();
+    docDeleted = docResult.meta.changes || 0;
+
+    // Clean up expired sessions older than 1 month
+    const sessionResult = await db.prepare(`
+      DELETE FROM sessions WHERE created_at < ?
+    `).bind(oneMonthAgo).run();
+    sessionsDeleted = sessionResult.meta.changes || 0;
+
+    return JSON_RESPONSE(200, {
+      ok: true,
+      log_deleted: logDeleted,
+      docs_deleted: docDeleted,
+      sessions_deleted: sessionsDeleted
+    });
+  } catch (e) {
+    return JSON_RESPONSE(500, { error: e.message });
+  }
+}
+
+// GET / -> redirect to /web
+async function handleRootRedirect() {
+  return new Response(null, {
+    status: 302,
+    headers: { 'Location': '/web' }
+  });
+}
+
+// GET /web (redirect to dashboard if session is still valid)
+async function handleWebEntry(ctx) {
+  const { request, db } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (sessionUser) {
+    return new Response(null, {
+      status: 302,
+      headers: { 'Location': '/web/dashboard' }
+    });
+  }
+  return HTML_RESPONSE(LOGIN_PAGE_HTML);
+}
+
+// POST /web/login
+async function handleWebLogin(ctx) {
+  const { request, db, expires, cookieSecure } = ctx;
+  const body = await parseJson(request);
+  if (!body || !body.username || !body.password) {
+    return JSON_RESPONSE(400, { ok: false, error: 'Invalid request' });
+  }
+  const found = await db.prepare(
+    'SELECT username FROM users WHERE username = ? AND password = ?'
+  ).bind(body.username, body.password).all();
+  if (!found.results || !found.results.length) {
+    return JSON_RESPONSE(401, { ok: false, error: 'Invalid credentials' });
+  }
+  const token = generateSessionToken();
+  await db.prepare(
+    'INSERT INTO sessions (token, username) VALUES (?, ?)'
+  ).bind(token, body.username).run();
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Set-Cookie': `session_token=${token}; HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000; Expires=${expires}${cookieSecure}`
+    }
+  });
+}
+
+// GET /web/logout
+async function handleWebLogout(ctx) {
+  const { request, db, cookieSecure } = ctx;
+  const cookie = request.headers.get('Cookie') || '';
+  const match = cookie.match(/session_token=([^;]+)/);
+  if (match) {
+    await db.prepare('DELETE FROM sessions WHERE token = ?').bind(match[1]).run();
+  }
+  return new Response(null, {
+    status: 302,
+    headers: {
+      'Location': '/web',
+      'Set-Cookie': `session_token=; HttpOnly; SameSite=Lax; Path=/web; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${cookieSecure}`
+    }
+  });
+}
+
+// GET /web/dashboard
+async function handleDashboard(ctx) {
+  const { request, db, expires, cookieSecure } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) {
+    return new Response(null, {
+      status: 302,
+      headers: { 'Location': '/web' }
+    });
+  }
+  // Sliding renewal: refresh session TTL to a full 30 days on each dashboard visit
+  const headers = {};
+  const match = (request.headers.get('Cookie') || '').match(/session_token=([^;]+)/);
+  if (match) {
+    await db.prepare('UPDATE sessions SET created_at = unixepoch() WHERE token = ?').bind(match[1]).run();
+    headers['Set-Cookie'] = `session_token=${match[1]}; HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000; Expires=${expires}${cookieSecure}`;
+  }
+  return HTML_RESPONSE(DASHBOARD_HTML, headers);
+}
+
+// ===== Router =====
+// Returns an array of capture params when pathname matches, or null.
+function matchRoute(routePath, pathname) {
+  if (typeof routePath === 'string') {
+    return routePath === pathname ? [] : null;
+  }
+  const m = pathname.match(routePath);
+  return m ? m.slice(1) : null;
+}
+
+const ROUTES = [
+  { method: 'POST', path: '/users/create', handler: handleCreateUser },
+  { method: 'GET',  path: '/users/auth', handler: handleUserAuth },
+  { method: 'PUT',  path: '/syncs/progress', handler: handlePutProgress },
+  { method: 'GET',  path: /^\/syncs\/progress\/(.+)$/, handler: handleGetProgress },
+  { method: 'GET',  path: '/healthstatus', handler: handleHealthstatus },
+  { method: 'GET',  path: /^\/web\/api\/documents\/(.+)\/history$/, handler: handleDocumentHistory },
+  { method: 'GET',  path: '/web/api/documents', handler: handleListDocuments },
+  { method: 'GET',  path: '/web/api/timeline', handler: handleTimeline },
+  { method: 'GET',  path: '/web/api/reading-stats', handler: handleReadingStats },
+  { method: 'GET',  path: '/web/api/device-stats', handler: handleDeviceStats },
+  { method: 'POST', path: '/web/api/change-password', handler: handleChangePassword },
+  { method: 'POST', path: '/web/api/maintenance', handler: handleMaintenance },
+  { method: 'GET',  path: '', handler: handleRootRedirect },
+  { method: 'GET',  path: '/web', handler: handleWebEntry },
+  { method: 'POST', path: '/web/login', handler: handleWebLogin },
+  { method: 'GET',  path: '/web/logout', handler: handleWebLogout },
+  { method: 'GET',  path: '/web/dashboard', handler: handleDashboard },
+];
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const pathname = url.pathname.replace(/\/+$/, '');
     const method = request.method.toUpperCase();
-
-    const authUser = request.headers.get('x-auth-user');
-    const authKey = request.headers.get('x-auth-key');
-
-    const db = env.KOSYNC_DB;
-
     const isSecure = url.protocol === 'https:';
-    const cookieSecure = isSecure ? '; Secure' : '';
-    const expires = new Date(Date.now() + 2592000 * 1000).toUTCString();
 
-    // POST /users/create
-    if (method === 'POST' && pathname === '/users/create') {
-      const openRegs = getEnvBool(env, 'OPEN_REGISTRATIONS', true);
-      if (!openRegs) return JSON_RESPONSE(403, 'This server is currently not accepting new registrations.');
+    const ctx = {
+      request,
+      env,
+      url,
+      pathname,
+      method,
+      db: env.KOSYNC_DB,
+      params: [],
+      authUser: request.headers.get('x-auth-user'),
+      authKey: request.headers.get('x-auth-key'),
+      isSecure,
+      cookieSecure: isSecure ? '; Secure' : '',
+      expires: new Date(Date.now() + 2592000 * 1000).toUTCString(),
+    };
 
-      const body = await parseJson(request);
-      if (!body || !body.username || !body.password) return JSON_RESPONSE(400, { message: 'Invalid request' });
-
-      const existing = await db.prepare('SELECT username FROM users WHERE username = ?').bind(body.username).all();
-      if (existing.results && existing.results.length) {
-        return JSON_RESPONSE(409, 'Username is already registered.');
-      }
-
-      await db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').bind(body.username, body.password).run();
-      return JSON_RESPONSE(201, { username: body.username });
-    }
-
-    // GET /users/auth
-    if (method === 'GET' && pathname === '/users/auth') {
-      if (!authUser || !authKey) return JSON_RESPONSE(401, { message: 'Unauthorized' });
-
-      const found = await db.prepare('SELECT username FROM users WHERE username = ? AND password = ?').bind(authUser, authKey).all();
-      if (found.results && found.results.length) {
-        return JSON_RESPONSE(200, { authorized: 'OK' });
-      }
-
-      const exists = await db.prepare('SELECT username FROM users WHERE username = ?').bind(authUser).all();
-      if (exists.results && exists.results.length) {
-        return JSON_RESPONSE(401, { message: 'Unauthorized' });
-      }
-      return JSON_RESPONSE(403, { message: 'Forbidden' });
-    }
-
-    // PUT /syncs/progress
-    if (method === 'PUT' && pathname === '/syncs/progress') {
-      if (!authUser || !authKey) return JSON_RESPONSE(401, { message: 'Unauthorized' });
-
-      const body = await parseJson(request);
-      if (!body || !body.document || body.progress === undefined || body.percentage === undefined || !body.device || !body.device_id) {
-        return JSON_RESPONSE(500, 'Unknown server error');
-      }
-
-      const authCheck = await db.prepare('SELECT username FROM users WHERE username = ? AND password = ?').bind(authUser, authKey).all();
-      if (!authCheck.results || !authCheck.results.length) return JSON_RESPONSE(401, { message: 'Unauthorized' });
-
-      const filename = body.metadata?.filename ?? null;
-      const title = body.metadata?.title ?? null;
-      const authors = body.metadata?.authors ?? null;
-      const timestamp = Math.floor(Date.now() / 1000);
-
-      await db.batch([
-        db.prepare(`INSERT INTO sync_log
-          (username, document, progress, percentage, device, device_id, timestamp, filename, title, authors)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-          .bind(authUser, body.document, body.progress, body.percentage, body.device, body.device_id, timestamp, filename, title, authors),
-        db.prepare(`INSERT OR REPLACE INTO documents
-          (username, document, progress, percentage, device, device_id, timestamp, filename, title, authors)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-          .bind(authUser, body.document, body.progress, body.percentage, body.device, body.device_id, timestamp, filename, title, authors)
-      ]);
-
-      return JSON_RESPONSE(200, { document: body.document, timestamp });
-    }
-
-    // GET /syncs/progress/:document
-    const progressMatch = pathname.match(/^\/syncs\/progress\/(.+)$/);
-    if (method === 'GET' && progressMatch) {
-      const document = decodeURIComponent(progressMatch[1]);
-      if (!authUser || !authKey) return JSON_RESPONSE(401, { message: 'Unauthorized' });
-      if (!document) return JSON_RESPONSE(500, 'Unknown server error');
-
-      const existsUser = await db.prepare('SELECT username FROM users WHERE username = ?').bind(authUser).all();
-      if (!existsUser.results || !existsUser.results.length) return JSON_RESPONSE(403, { message: 'Forbidden' });
-
-      const authCheck = await db.prepare('SELECT username FROM users WHERE username = ? AND password = ?').bind(authUser, authKey).all();
-      if (!authCheck.results || !authCheck.results.length) return JSON_RESPONSE(401, { message: 'Unauthorized' });
-
-      const res = await db.prepare('SELECT * FROM documents WHERE username = ? AND document = ?').bind(authUser, document).all();
-      if (res.results && res.results.length) {
-        const row = res.results[0];
-        const rrdi = getEnvBool(env, 'RECEIVE_RANDOM_DEVICE_ID', false);
-        const device_id = rrdi ? randomDeviceId() : row.device_id;
-        const response = {
-          username: authUser,
-          document: row.document,
-          progress: row.progress,
-          percentage: row.percentage,
-          device: row.device,
-          device_id,
-          timestamp: row.timestamp
-        };
-
-        // Log the GET progress event for reading stats (timestamp + book info + progress)
-        const now = Math.floor(Date.now() / 1000);
-        await db.prepare(`INSERT INTO sync_log
-          (username, document, progress, percentage, timestamp, filename, title, authors)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-          .bind(authUser, row.document, row.progress, row.percentage, now, row.filename, row.title, row.authors)
-          .run();
-
-        return JSON_RESPONSE(200, response);
-      }
-
-      return JSON_RESPONSE(200, {
-        username: authUser,
-      });
-    }
-
-    // GET /healthstatus
-    if (method === 'GET' && pathname === '/healthstatus') {
-      return JSON_RESPONSE(200, { message: 'healthy' });
-    }
-
-    // Web routes
-
-    // GET /web/api/documents/:document/history
-    const docHistoryMatch = pathname.match(/^\/web\/api\/documents\/(.+)\/history$/);
-    if (method === 'GET' && docHistoryMatch) {
-      const sessionUser = await getSessionUser(db, request);
-      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
-      const document = decodeURIComponent(docHistoryMatch[1]);
-      const res = await db.prepare(
-        'SELECT * FROM sync_log WHERE username = ? AND document = ? ORDER BY created_at DESC'
-      ).bind(sessionUser, document).all();
-      return JSON_RESPONSE(200, res.results || []);
-    }
-
-    // GET /web/api/documents
-    if (method === 'GET' && pathname === '/web/api/documents') {
-      const sessionUser = await getSessionUser(db, request);
-      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
-      const res = await db.prepare(
-        'SELECT document, progress, percentage, device, device_id, timestamp, filename, title, authors FROM documents WHERE username = ? ORDER BY timestamp DESC'
-      ).bind(sessionUser).all();
-      return JSON_RESPONSE(200, res.results || []);
-    }
-
-    // GET /web/api/timeline
-    if (method === 'GET' && pathname === '/web/api/timeline') {
-      const sessionUser = await getSessionUser(db, request);
-      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
-      const res = await db.prepare(
-        'SELECT * FROM sync_log WHERE username = ? ORDER BY created_at DESC LIMIT 100'
-      ).bind(sessionUser).all();
-      return JSON_RESPONSE(200, res.results || []);
-    }
-
-    // GET /web/api/reading-stats
-    if (method === 'GET' && pathname === '/web/api/reading-stats') {
-      const sessionUser = await getSessionUser(db, request);
-      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
-      const res = await db.prepare(
-        'SELECT document, title, filename, authors, percentage, timestamp, device, device_id FROM sync_log WHERE username = ? ORDER BY timestamp ASC, id ASC'
-      ).bind(sessionUser).all();
-      const rows = res.results || [];
-      // Aggregate per document in JS (grouping by document, not display_title,
-      // so docs with identical titles are not merged).
-      const byDoc = new Map();
-      for (const row of rows) {
-        let agg = byDoc.get(row.document);
-        if (!agg) {
-          agg = { events: [], pushEvents: [], display_title: null, authors: null, first_sync: null, last_sync: null, latest_percentage: null };
-          byDoc.set(row.document, agg);
-        }
-        agg.events.push(row);
-        if (row.device) {
-          agg.pushEvents.push(row);
-        }
-        const t = row.title || row.filename || row.document;
-        if (t) agg.display_title = t; // last non-empty wins
-        if (row.authors) agg.authors = row.authors; // last non-empty wins
-        if (agg.first_sync === null || row.timestamp < agg.first_sync) agg.first_sync = row.timestamp;
-        if (agg.last_sync === null || row.timestamp > agg.last_sync) agg.last_sync = row.timestamp;
-        if (row.percentage !== null && row.percentage !== undefined) {
-          // Rows are ordered chronologically, so the last valid percentage is
-          // the actual latest reading position rather than the historical max.
-          agg.latest_percentage = row.percentage;
-        }
-      }
-      const out = [];
-      const now = Math.floor(Date.now() / 1000);
-      for (const [document, agg] of byDoc) {
-        const first_sync = agg.first_sync;
-        const last_sync = agg.last_sync;
-        // fin_by estimation (day granularity):
-        // "一天读了多少进度" — collapse intra-day syncs, compute avg daily progress,
-        // then estimate remaining days based on active reading days (not continuous seconds).
-        const validPushes = agg.pushEvents.filter(
-          (e) => typeof e.percentage === 'number' && e.percentage >= 0 && typeof e.timestamp === 'number' && e.timestamp > 0
-        );
-        let fin_by = null;
-        if (validPushes.length >= 2) {
-          const currentPct = agg.latest_percentage ?? validPushes[validPushes.length - 1].percentage;
-          if (currentPct < 0.999) {
-            // Group pushes by UTC day — multiple syncs on same day collapse to one day record
-            const dayMap = new Map();
-            for (const row of validPushes) {
-              const dayKey = Math.floor(row.timestamp / 86400);
-              const existing = dayMap.get(dayKey);
-              if (!existing) {
-                dayMap.set(dayKey, { dayKey, firstPct: row.percentage, lastPct: row.percentage });
-              } else {
-                existing.lastPct = row.percentage; // last sync of the day wins
-              }
-            }
-            const distinctDays = Array.from(dayMap.values()).sort((a, b) => a.dayKey - b.dayKey);
-            const recentDays = distinctDays.slice(-14); // recent window: up to 14 active days
-
-            if (recentDays.length >= 1) {
-              // Compute per-day progress deltas
-              // - First active day: intra-day progress (covers multiple syncs same day)
-              // - Subsequent active days: day-over-day progress (covers exactly one day's read amount)
-              const dailyDeltas = [];
-              const d0 = recentDays[0].lastPct - recentDays[0].firstPct;
-              if (d0 > 0) dailyDeltas.push(d0);
-              for (let i = 1; i < recentDays.length; i++) {
-                const delta = recentDays[i].lastPct - recentDays[i - 1].lastPct;
-                if (delta > 0) dailyDeltas.push(delta);
-              }
-              // If only one distinct day and it had a single push (d0==0), no delta yet —
-              // fall through to no estimate (need at least one positive daily increment)
-
-              // Filter outliers: ignore >60% per day (unrealistic) and tiny noise
-              let deltas = dailyDeltas.filter((v) => v > 0 && v < 0.6);
-              if (deltas.length === 0) deltas = dailyDeltas.filter((v) => v > 0);
-
-              if (deltas.length >= 5) {
-                // Trim 25% low and high extremes for robustness
-                deltas.sort((a, b) => a - b);
-                const cut = Math.max(1, Math.floor(deltas.length * 0.25));
-                deltas = deltas.slice(cut, deltas.length - cut);
-              }
-
-              if (deltas.length > 0) {
-                const avgDaily = deltas.reduce((s, v) => s + v, 0) / deltas.length;
-                if (avgDaily > 0 && Number.isFinite(avgDaily)) {
-                  const remaining = Math.max(0, 1.0 - currentPct);
-                  const daysLeftExact = remaining / avgDaily;
-                  if (Number.isFinite(daysLeftExact) && daysLeftExact > 0 && daysLeftExact <= 3650) {
-                    fin_by = Math.round(now + daysLeftExact * 86400);
-                    // Round to end of that UTC day and ensure not in past
-                    fin_by = (Math.floor(fin_by / 86400) + 1) * 86400 - 1;
-                    const todayEnd = (Math.floor(now / 86400) + 1) * 86400 - 1;
-                    if (fin_by < todayEnd) fin_by = todayEnd;
-                  }
-                }
-              }
-            }
-          }
-        }
-        out.push({
-          display_title: agg.display_title || document,
-          authors: agg.authors,
-          first_sync,
-          last_sync,
-          duration_seconds: (first_sync !== null && last_sync !== null) ? (last_sync - first_sync) : null,
-          event_count: agg.events.length,
-          latest_percentage: agg.latest_percentage,
-          fin_by
-        });
-      }
-      out.sort((a, b) => (b.duration_seconds || 0) - (a.duration_seconds || 0));
-      return JSON_RESPONSE(200, out);
-    }
-
-    // GET /web/api/device-stats
-    if (method === 'GET' && pathname === '/web/api/device-stats') {
-      const sessionUser = await getSessionUser(db, request);
-      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
-      const res = await db.prepare(`
-        SELECT
-          device,
-          device_id,
-          COUNT(*) AS sync_count,
-          (MAX(timestamp) - MIN(timestamp)) AS total_duration_seconds
-        FROM sync_log
-        WHERE username = ? AND device_id IS NOT NULL AND device_id != ''
-        GROUP BY device, device_id
-        ORDER BY sync_count DESC
-      `).bind(sessionUser).all();
-      return JSON_RESPONSE(200, res.results || []);
-    }
-
-    // POST /web/api/change-password
-    if (method === 'POST' && pathname === '/web/api/change-password') {
-      const sessionUser = await getSessionUser(db, request);
-      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
-      const body = await parseJson(request);
-      if (!body || !body.password) return JSON_RESPONSE(400, { ok: false, error: 'Password required' });
-      // Web login sends MD5 hash, so store the hash directly
-      await db.prepare('UPDATE users SET password = ? WHERE username = ?').bind(body.password, sessionUser).run();
-      return JSON_RESPONSE(200, { ok: true });
-    }
-
-    // POST /web/api/maintenance
-    if (method === 'POST' && pathname === '/web/api/maintenance') {
-      const sessionUser = await getSessionUser(db, request);
-      if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
-      try {
-        const now = Math.floor(Date.now() / 1000);
-        const oneYearAgo = now - 365 * 86400;
-        const oneMonthAgo = now - 30 * 86400;
-        let logDeleted = 0;
-        let docDeleted = 0;
-        let sessionsDeleted = 0;
-
-        // Clean up sync_log older than 1 year
-        const logResult = await db.prepare(`
-          DELETE FROM sync_log WHERE username = ? AND created_at < ?
-        `).bind(sessionUser, oneYearAgo).run();
-        logDeleted = logResult.meta.changes || 0;
-
-        // Remove documents with last sync older than 1 year
-        const docResult = await db.prepare(`
-          DELETE FROM documents WHERE username = ? AND timestamp < ?
-        `).bind(sessionUser, oneYearAgo).run();
-        docDeleted = docResult.meta.changes || 0;
-
-        // Clean up expired sessions older than 1 month
-        const sessionResult = await db.prepare(`
-          DELETE FROM sessions WHERE created_at < ?
-        `).bind(oneMonthAgo).run();
-        sessionsDeleted = sessionResult.meta.changes || 0;
-
-        return JSON_RESPONSE(200, {
-          ok: true,
-          log_deleted: logDeleted,
-          docs_deleted: docDeleted,
-          sessions_deleted: sessionsDeleted
-        });
-      } catch (e) {
-        return JSON_RESPONSE(500, { error: e.message });
-      }
-    }
-
-    // GET / -> redirect to /web
-    if (method === 'GET' && pathname === '') {
-      return new Response(null, {
-        status: 302,
-        headers: { 'Location': '/web' }
-      });
-    }
-
-    // GET /web (redirect to dashboard if session is still valid)
-    if (method === 'GET' && pathname === '/web') {
-      const sessionUser = await getSessionUser(db, request);
-      if (sessionUser) {
-        return new Response(null, {
-          status: 302,
-          headers: { 'Location': '/web/dashboard' }
-        });
-      }
-      return HTML_RESPONSE(LOGIN_PAGE_HTML);
-    }
-
-    // POST /web/login
-    if (method === 'POST' && pathname === '/web/login') {
-      const body = await parseJson(request);
-      if (!body || !body.username || !body.password) {
-        return JSON_RESPONSE(400, { ok: false, error: 'Invalid request' });
-      }
-      const found = await db.prepare(
-        'SELECT username FROM users WHERE username = ? AND password = ?'
-      ).bind(body.username, body.password).all();
-      if (!found.results || !found.results.length) {
-        return JSON_RESPONSE(401, { ok: false, error: 'Invalid credentials' });
-      }
-      const token = generateSessionToken();
-      await db.prepare(
-        'INSERT INTO sessions (token, username) VALUES (?, ?)'
-      ).bind(token, body.username).run();
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Set-Cookie': `session_token=${token}; HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000; Expires=${expires}${cookieSecure}`
-        }
-      });
-    }
-
-    // GET /web/logout
-    if (method === 'GET' && pathname === '/web/logout') {
-      const cookie = request.headers.get('Cookie') || '';
-      const match = cookie.match(/session_token=([^;]+)/);
-      if (match) {
-        await db.prepare('DELETE FROM sessions WHERE token = ?').bind(match[1]).run();
-      }
-      return new Response(null, {
-        status: 302,
-        headers: {
-          'Location': '/web',
-          'Set-Cookie': `session_token=; HttpOnly; SameSite=Lax; Path=/web; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${cookieSecure}`
-        }
-      });
-    }
-
-    // GET /web/dashboard
-    if (method === 'GET' && pathname === '/web/dashboard') {
-      const sessionUser = await getSessionUser(db, request);
-      if (!sessionUser) {
-        return new Response(null, {
-          status: 302,
-          headers: { 'Location': '/web' }
-        });
-      }
-      // Sliding renewal: refresh session TTL to a full 30 days on each dashboard visit
-      const headers = {};
-      const match = (request.headers.get('Cookie') || '').match(/session_token=([^;]+)/);
-      if (match) {
-        await db.prepare('UPDATE sessions SET created_at = unixepoch() WHERE token = ?').bind(match[1]).run();
-        headers['Set-Cookie'] = `session_token=${match[1]}; HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000; Expires=${expires}${cookieSecure}`;
-      }
-      return HTML_RESPONSE(DASHBOARD_HTML, headers);
+    for (const route of ROUTES) {
+      if (route.method !== method) continue;
+      const params = matchRoute(route.path, pathname);
+      if (params === null) continue;
+      ctx.params = params;
+      return route.handler(ctx);
     }
 
     return new Response('Not found', { status: 404 });
