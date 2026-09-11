@@ -1894,25 +1894,47 @@ function matchRoute(routePath, pathname) {
   return m ? m.slice(1) : null;
 }
 
-const ROUTES = [
-  { method: 'POST', path: '/users/create', handler: handleCreateUser },
-  { method: 'GET',  path: '/users/auth', handler: handleUserAuth },
-  { method: 'PUT',  path: '/syncs/progress', handler: handlePutProgress },
-  { method: 'GET',  path: /^\/syncs\/progress\/(.+)$/, handler: handleGetProgress },
-  { method: 'GET',  path: '/healthstatus', handler: handleHealthstatus },
-  { method: 'GET',  path: /^\/web\/api\/documents\/(.+)\/history$/, handler: handleDocumentHistory },
-  { method: 'GET',  path: '/web/api/documents', handler: handleListDocuments },
-  { method: 'GET',  path: '/web/api/timeline', handler: handleTimeline },
-  { method: 'GET',  path: '/web/api/reading-stats', handler: handleReadingStats },
-  { method: 'GET',  path: '/web/api/device-stats', handler: handleDeviceStats },
-  { method: 'POST', path: '/web/api/change-password', handler: handleChangePassword },
-  { method: 'POST', path: '/web/api/maintenance', handler: handleMaintenance },
-  { method: 'GET',  path: '', handler: handleRootRedirect },
-  { method: 'GET',  path: '/web', handler: handleWebEntry },
-  { method: 'POST', path: '/web/login', handler: handleWebLogin },
-  { method: 'GET',  path: '/web/logout', handler: handleWebLogout },
-  { method: 'GET',  path: '/web/dashboard', handler: handleDashboard },
-];
+// First path segment: "/web/api/x" -> "/web", "/healthstatus" -> "/healthstatus", "" -> "".
+function routePrefix(pathname) {
+  if (pathname === '') return '';
+  const slash = pathname.indexOf('/', 1);
+  return slash === -1 ? pathname : pathname.slice(0, slash);
+}
+
+// method -> prefix -> { exact: { fullPath: handler }, dynamic: [{ pattern, handler }] }
+const ROUTES = {
+  GET: {
+    '/users': { exact: { '/users/auth': handleUserAuth } },
+    '/syncs': { dynamic: [{ pattern: /^\/syncs\/progress\/(.+)$/, handler: handleGetProgress }] },
+    '/healthstatus': { exact: { '/healthstatus': handleHealthstatus } },
+    '/web': {
+      exact: {
+        '/web/api/documents': handleListDocuments,
+        '/web/api/timeline': handleTimeline,
+        '/web/api/reading-stats': handleReadingStats,
+        '/web/api/device-stats': handleDeviceStats,
+        '/web': handleWebEntry,
+        '/web/logout': handleWebLogout,
+        '/web/dashboard': handleDashboard,
+      },
+      dynamic: [{ pattern: /^\/web\/api\/documents\/(.+)\/history$/, handler: handleDocumentHistory }],
+    },
+    '': { exact: { '': handleRootRedirect } },
+  },
+  POST: {
+    '/users': { exact: { '/users/create': handleCreateUser } },
+    '/web': {
+      exact: {
+        '/web/api/change-password': handleChangePassword,
+        '/web/api/maintenance': handleMaintenance,
+        '/web/login': handleWebLogin,
+      },
+    },
+  },
+  PUT: {
+    '/syncs': { exact: { '/syncs/progress': handlePutProgress } },
+  },
+};
 
 export default {
   async fetch(request, env) {
@@ -1936,12 +1958,23 @@ export default {
       expires: new Date(Date.now() + 2592000 * 1000).toUTCString(),
     };
 
-    for (const route of ROUTES) {
-      if (route.method !== method) continue;
-      const params = matchRoute(route.path, pathname);
-      if (params === null) continue;
-      ctx.params = params;
-      return route.handler(ctx);
+    const methodRoutes = ROUTES[method];
+    if (methodRoutes) {
+      const group = methodRoutes[routePrefix(pathname)];
+      if (group) {
+        if (group.exact && Object.prototype.hasOwnProperty.call(group.exact, pathname)) {
+          return group.exact[pathname](ctx);
+        }
+        if (group.dynamic) {
+          for (const route of group.dynamic) {
+            const params = matchRoute(route.pattern, pathname);
+            if (params !== null) {
+              ctx.params = params;
+              return route.handler(ctx);
+            }
+          }
+        }
+      }
     }
 
     return new Response('Not found', { status: 404 });
