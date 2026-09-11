@@ -47,6 +47,7 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
 - **Env flags** (Workers vars; parsed via `getEnvBool` → only lowercase `"true"` is true):
   - `OPEN_REGISTRATIONS` — default **true**; `false` → 403 on `POST /users/create`
   - `RECEIVE_RANDOM_DEVICE_ID` — default **false**; when true, GET progress returns a random `device_id` (forces client resync)
+- **Daily cleanup:** a Cloudflare Cron Trigger (`[triggers] crons = ["0 3 * * *"]` in `wrangler.toml`) invokes the `scheduled` export daily, which globally deletes `sync_log`/`documents` older than 1 year and `sessions` older than 1 month. There is no manual maintenance endpoint/UI.
 - **Paths:** trailing slashes stripped before match.
 - **Schema:** `users(username PK, password)` — `password` stores MD5 hashes, not plaintext; `documents` PK `(username, document)`, FK to users.
 
@@ -80,7 +81,6 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
 | `GET` | `/web/api/device-stats` | JSON sync count and duration per device |
 | `GET` | `/web/api/timeline` | JSON recent sync log (last 100 entries) |
 | `POST` | `/web/api/change-password` | Body `{password}` (MD5 hash). Changes user password. |
-| `POST` | `/web/api/maintenance` | Cleans up old sync_log (>1 yr), documents (>1 yr), and expired sessions (>1 mo) |
 
 Session cookies: `HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000`; `Secure` added on HTTPS. Expired sessions (30 days) are cleaned up on any session access.
 

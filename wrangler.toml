@@ -21,3 +21,6 @@ head_sampling_rate = 1
 binding = "KOSYNC_DB"
 database_name = "kosync"
 migrations_dir = "migrations"
+
+[triggers]
+crons = ["0 3 * * *"]
