@@ -14,6 +14,7 @@ KOReader Progress Sync backend on Cloudflare Workers + D1. Single-file Worker; n
 | `migrations/002_add_metadata_columns.sql` | Adds `filename`, `title`, `authors` to `documents` |
 | `migrations/003_create_sync_log.sql` | `sync_log` table for sync history |
 | `migrations/004_create_sessions.sql` | `sessions` table for web UI auth |
+| `migrations/005_add_accept_backward_progress.sql` | Adds `accept_backward_progress` to `users` (per-user backward-sync toggle, default 1) |
 | `package.json` | `dev` / `deploy` only |
 
 ## Commands
@@ -49,7 +50,7 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
   - `RECEIVE_RANDOM_DEVICE_ID` — default **false**; when true, GET progress returns a random `device_id` (forces client resync)
 - **Daily cleanup:** a Cloudflare Cron Trigger (`[triggers] crons = ["0 3 * * *"]` in `wrangler.toml`) invokes the `scheduled` export daily, which globally deletes `sync_log`/`documents` older than 1 year and `sessions` older than 1 month. There is no manual maintenance endpoint/UI.
 - **Paths:** trailing slashes stripped before match.
-- **Schema:** `users(username PK, password)` — `password` stores MD5 hashes, not plaintext; `documents` PK `(username, document)`, FK to users.
+- **Schema:** `users(username PK, password, accept_backward_progress)` — `password` stores MD5 hashes, not plaintext; `accept_backward_progress` INTEGER default 1 (accept backward progress); `documents` PK `(username, document)`, FK to users.
 
 ### Web UI (inline HTML in `src/index.js`)
 
@@ -59,7 +60,7 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
   - **Simple-DataTables** - sortable/searchable/paginated tables for Documents, History, and Reading Duration
   - **Day.js** + relativeTime plugin - `dayjs(ts*1000).fromNow()` for all time columns; exact time shown on hover via `<span title="...">`; `formatTime()` uses `dayjs().format('YYYY-MM-DD HH:mm:ss')` as the tooltip text
   - **Chart.js v4** - used for Statistics charts: device activity (bar chart) and top books by reading duration (horizontal bar chart)
-- **Dashboard layout:** Glass-morphism sticky header (brand mark "K" + title + theme dropdown + logout + password change) → single-column Library panel → modal for document history detail → Reading Duration panel → Statistics charts panel (device + books side-by-side desktop, stacked mobile)
+- **Dashboard layout:** Glass-morphism sticky header (brand mark "K" + title + theme dropdown + sync-settings gear + logout + password change) → single-column Library panel → modal for document history detail → Reading Duration panel → Statistics charts panel (device + books side-by-side desktop, stacked mobile)
 - **Document history modal:** Clicking a document row opens a centered modal overlay with the history table; close via × button, backdrop click, or Escape key
 - **HTML constants:** `LOGIN_PAGE_HTML` and `DASHBOARD_HTML` are JS template literals in `src/index.js` - note escaped backticks/quotes in onclick handlers
 - **Progress bars** use PicoCSS native `<progress value="x" max="100">` element (not custom spans) - PicoCSS styles it via `--pico-progress-color`
@@ -80,7 +81,9 @@ No test/lint/typecheck scripts. Verify with `bun run dev` + HTTP against routes 
 | `GET` | `/web/api/reading-stats` | JSON reading duration stats per document |
 | `GET` | `/web/api/device-stats` | JSON sync count and duration per device |
 | `GET` | `/web/api/timeline` | JSON recent sync log (last 100 entries) |
+| `GET` | `/web/api/settings` | JSON user sync settings `{accept_backward_progress: bool}` |
 | `POST` | `/web/api/change-password` | Body `{password}` (MD5 hash). Changes user password. |
+| `POST` | `/web/api/settings` | Body `{accept_backward_progress: bool}`. Saves per-user sync settings (Settings modal / ⚙ gear button). |
 
 Session cookies: `HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000`; `Secure` added on HTTPS. Expired sessions (30 days) are cleaned up on any session access.
 
@@ -96,6 +99,8 @@ Session cookies: `HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000`; `Secure` 
 | other | | plain `404` text, not JSON |
 
 `INSERT OR REPLACE` on progress upsert; `timestamp` = unix seconds server-side.
+
+**Backward progress guard:** each user has `users.accept_backward_progress` (default 1 = accept). When 0, a `PUT /syncs/progress` whose progress is behind the stored `documents` row (backward if the numeric `percentage` or the numeric `progress` is lower; non-numeric values are ignored) is rejected: nothing is written to `documents` **or** `sync_log` (a sync_log row would corrupt reading stats' latest percentage / fin_by estimate), and the response is `200 {document, timestamp:<stored>}` so KOReader clients are unaffected.
 
 ## Gotchas
 

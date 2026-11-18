@@ -763,6 +763,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       <option value="light">&#9788; Light</option>
       <option value="dark">&#9790; Dark</option>
     </select>
+    <button type="button" onclick="openSettingsModal()" class="outline secondary btn-icon" title="Sync settings">&#9881;</button>
     <button type="button" onclick="openPasswordModal()" class="outline secondary btn-icon" title="Change password">&#128273;</button>
     <button type="button" onclick="logout()" class="outline secondary btn-icon" title="Logout">&#128682;</button>
   </div>
@@ -890,6 +891,30 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
           <div id="passwordError" class="error-msg" style="display:none;margin-bottom:0.75rem"></div>
           <div id="passwordSuccess" style="display:none;color:var(--pico-color-green-500, #2e7d32);margin-bottom:0.75rem;text-align:center"></div>
           <button type="submit">Change password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal-overlay" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+      <div class="modal-header">
+        <div>
+          <span class="panel-kicker">Account</span>
+          <h2 id="settingsModalTitle">Sync settings</h2>
+        </div>
+        <button type="button" class="modal-close" onclick="closeSettingsModal()" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="settingsForm" onsubmit="saveSettings(event)">
+          <label for="acceptBackward">
+            <input type="checkbox" id="acceptBackward" role="switch">
+            Accept backward progress
+          </label>
+          <p class="panel-hint">When enabled (default), a device may overwrite the stored progress with an earlier reading position. When disabled, uploads that are behind the stored progress are ignored, so re-reading a book on another device will not move your position back.</p>
+          <div id="settingsError" class="error-msg" style="display:none;margin-bottom:0.75rem"></div>
+          <div id="settingsSuccess" style="display:none;color:var(--pico-color-green-500, #2e7d32);margin-bottom:0.75rem;text-align:center"></div>
+          <button type="submit">Save</button>
         </form>
       </div>
     </div>
@@ -1181,7 +1206,9 @@ document.getElementById('historyModal').addEventListener('click', function(e) {
 });
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
-    if (!document.getElementById('passwordModal').hasAttribute('hidden')) {
+    if (!document.getElementById('settingsModal').hasAttribute('hidden')) {
+      closeSettingsModal();
+    } else if (!document.getElementById('passwordModal').hasAttribute('hidden')) {
       closePasswordModal();
     } else if (!document.getElementById('historyModal').hasAttribute('hidden')) {
       closeHistoryModal();
@@ -1202,6 +1229,46 @@ function closePasswordModal() {
 document.getElementById('passwordModal').addEventListener('click', function(e) {
   if (e.target === this) closePasswordModal();
 });
+
+/* —— Sync settings modal —— */
+function openSettingsModal() {
+  document.getElementById('settingsError').style.display = 'none';
+  document.getElementById('settingsSuccess').style.display = 'none';
+  var modal = document.getElementById('settingsModal');
+  modal.removeAttribute('hidden');
+  apiFetch('/web/api/settings').then(function(data) {
+    if (!data) return;
+    document.getElementById('acceptBackward').checked = !!data.accept_backward_progress;
+  });
+}
+function closeSettingsModal() {
+  document.getElementById('settingsModal').setAttribute('hidden', '');
+}
+document.getElementById('settingsModal').addEventListener('click', function(e) {
+  if (e.target === this) closeSettingsModal();
+});
+async function saveSettings(e) {
+  e.preventDefault();
+  var errorEl = document.getElementById('settingsError');
+  var successEl = document.getElementById('settingsSuccess');
+  errorEl.style.display = 'none';
+  successEl.style.display = 'none';
+  var res = await fetch('/web/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accept_backward_progress: document.getElementById('acceptBackward').checked })
+  });
+  if (res.status === 401) { window.location.href = '/web'; return; }
+  var data = await res.json();
+  if (data && data.ok) {
+    successEl.textContent = 'Settings saved';
+    successEl.style.display = 'block';
+    setTimeout(closeSettingsModal, 1200);
+  } else {
+    errorEl.textContent = (data && data.error) || 'Failed to save settings';
+    errorEl.style.display = 'block';
+  }
+}
 async function changePassword(e) {
   e.preventDefault();
   var errorEl = document.getElementById('passwordError');
@@ -1495,6 +1562,17 @@ async function handleUserAuth(ctx) {
   return JSON_RESPONSE(403, { message: 'Forbidden' });
 }
 
+// True when `incoming` progress is behind `stored`. Backward if either the
+// numeric percentage or the numeric progress (e.g. page number) is lower.
+function isBackwardProgress(incoming, stored) {
+  const ipct = Number(incoming.percentage);
+  const spct = Number(stored.percentage);
+  if (Number.isFinite(ipct) && Number.isFinite(spct) && ipct < spct) return true;
+  const ip = Number(incoming.progress);
+  const sp = Number(stored.progress);
+  return Number.isFinite(ip) && Number.isFinite(sp) && ip < sp;
+}
+
 async function handlePutProgress(ctx) {
   const { request, db, authUser, authKey } = ctx;
   if (!authUser || !authKey) return JSON_RESPONSE(401, { message: 'Unauthorized' });
@@ -1504,8 +1582,22 @@ async function handlePutProgress(ctx) {
     return JSON_RESPONSE(500, 'Unknown server error');
   }
 
-  const authCheck = await db.prepare('SELECT username FROM users WHERE username = ? AND password = ?').bind(authUser, authKey).all();
+  const authCheck = await db.prepare('SELECT username, accept_backward_progress FROM users WHERE username = ? AND password = ?').bind(authUser, authKey).all();
   if (!authCheck.results || !authCheck.results.length) return JSON_RESPONSE(401, { message: 'Unauthorized' });
+
+  // Per-user setting (default true): reject uploads whose progress is lower
+  // than the stored value. Rejected syncs are not written to documents or
+  // sync_log (sync_log rows would corrupt reading stats' latest percentage).
+  const acceptBackward = authCheck.results[0].accept_backward_progress !== 0;
+  if (!acceptBackward) {
+    const existing = await db.prepare('SELECT progress, percentage, timestamp FROM documents WHERE username = ? AND document = ?').bind(authUser, body.document).all();
+    if (existing.results && existing.results.length) {
+      const stored = existing.results[0];
+      if (isBackwardProgress(body, stored)) {
+        return JSON_RESPONSE(200, { document: body.document, timestamp: stored.timestamp });
+      }
+    }
+  }
 
   const filename = body.metadata?.filename ?? null;
   const title = body.metadata?.title ?? null;
@@ -1751,6 +1843,30 @@ async function handleChangePassword(ctx) {
   return JSON_RESPONSE(200, { ok: true });
 }
 
+// GET /web/api/settings
+async function handleGetSettings(ctx) {
+  const { request, db } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+  const res = await db.prepare('SELECT accept_backward_progress FROM users WHERE username = ?').bind(sessionUser).all();
+  const val = (res.results && res.results.length) ? res.results[0].accept_backward_progress : 1;
+  return JSON_RESPONSE(200, { accept_backward_progress: val !== 0 });
+}
+
+// POST /web/api/settings
+async function handleUpdateSettings(ctx) {
+  const { request, db } = ctx;
+  const sessionUser = await getSessionUser(db, request);
+  if (!sessionUser) return JSON_RESPONSE(401, { error: 'Unauthorized' });
+  const body = await parseJson(request);
+  if (!body || typeof body.accept_backward_progress !== 'boolean') {
+    return JSON_RESPONSE(400, { ok: false, error: 'accept_backward_progress (boolean) required' });
+  }
+  await db.prepare('UPDATE users SET accept_backward_progress = ? WHERE username = ?')
+    .bind(body.accept_backward_progress ? 1 : 0, sessionUser).run();
+  return JSON_RESPONSE(200, { ok: true, accept_backward_progress: body.accept_backward_progress });
+}
+
 // GET / -> redirect to /web
 async function handleRootRedirect() {
   return new Response(null, {
@@ -1864,6 +1980,7 @@ const ROUTES = {
         '/web/api/timeline': handleTimeline,
         '/web/api/reading-stats': handleReadingStats,
         '/web/api/device-stats': handleDeviceStats,
+        '/web/api/settings': handleGetSettings,
         '/web': handleWebEntry,
         '/web/logout': handleWebLogout,
         '/web/dashboard': handleDashboard,
@@ -1877,6 +1994,7 @@ const ROUTES = {
     '/web': {
       exact: {
         '/web/api/change-password': handleChangePassword,
+        '/web/api/settings': handleUpdateSettings,
         '/web/login': handleWebLogin,
       },
     },
