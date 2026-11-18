@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "bunx wrangler dev -c wrangler.toml",
-    "deploy": "bunx wrangler deploy -c wrangler.toml"
+    "deploy": "bunx wrangler d1 migrations apply kosync --remote && bunx wrangler deploy -c wrangler.toml"
   },
   "engines": {
     "node": ">=16"

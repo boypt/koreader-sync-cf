@@ -22,10 +22,9 @@ KOReader Progress Sync backend on Cloudflare Workers + D1. Single-file Worker; n
 ```bash
 bun install                          # or npm i — wrangler + workers-types
 bun run dev                          # wrangler dev -c wrangler.toml
-bun run deploy                       # wrangler deploy -c wrangler.toml
+bun run deploy                       # D1 migrations --remote, then wrangler deploy
 
-# D1 (database_id not in wrangler.toml until created/bound)
-bunx wrangler d1 create kosync
+# D1 migrations (now also run automatically before every `bun run deploy`)
 bunx wrangler d1 migrations apply kosync --local
 bunx wrangler d1 migrations apply kosync --remote
 ```
@@ -106,7 +105,7 @@ Session cookies: `HttpOnly; SameSite=Lax; Path=/web; Max-Age=2592000`; `Secure` 
 
 - Do **not** “fix” MD5 password storage, 500-on-bad-PUT, or username-only empty progress without checking KOReader client expectations — response shapes/status codes are protocol surface. Passwords are stored as MD5 hashes (clients send hashes; server compares directly) — this is intentional for KOReader protocol compatibility.
 - Do **not** rename D1 binding `KOSYNC_DB` or table/column names without a migration + client impact check.
-- `wrangler.toml` has no `database_id` — local/remote D1 must be created and id filled (or deploy button flow) before remote works.
+- `wrangler.toml` has no `database_id` (kept out of the repo intentionally — others may fork/use it). Wrangler 4.x resolves the remote D1 database by `database_name`, so remote commands work as-is after `bunx wrangler d1 create kosync`.
 - `@cloudflare/workers-types` is present but code is **`.js`** with no `tsconfig` — don’t assume TypeScript build.
 - Root `.gitignore` is mostly a Python template leftover; project-specific ignore is mainly `data/db.json` (legacy).
 - README deploy badge points at upstream `boypt/koreader-sync-cf`.
